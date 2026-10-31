@@ -1,6 +1,6 @@
-# 6. Methodology
+# 7. Methodology
 
-[Docs index](README.md) · Previous: [5. Results](5-results.md)
+[Docs index](README.md) · Previous: [6. Results](6-results.md)
 
 How every number in these docs is produced, and what it does not cover.
 
@@ -84,7 +84,7 @@ are in GiB. The shared-memory limit assumes the 48 KB default per block.
 ## Limitations
 
 - **Operation counts are not running times.** They don't capture memory traffic, scheduling,
-  or how well each algorithm uses the GPU. That is the point of [4. Why it suits GPUs](4-gpu.md).
+  or how well each algorithm uses the GPU. That is the point of [5. Why it suits GPUs](5-gpu.md).
 - **The Yrrid configuration is an approximation** of Yrrid's code: c = 23, signed digits, 2 bucket
   sets. It does not model their trick of negating scalars with the top bit set, their bucket
   sorting, or their exact number of precomputed copies.
@@ -103,3 +103,5 @@ task bench-full         # regenerate benchmarks/results/ (about 30 s)
 uv run python scripts/make_figures.py      # docs/figures/
 uv run python scripts/find_goldilocks_curve.py
 ```
+
+[Docs index](README.md) · Previous: [6. Results](6-results.md)

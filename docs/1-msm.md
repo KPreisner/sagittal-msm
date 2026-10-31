@@ -1,18 +1,25 @@
-# 1. Multi-scalar multiplication
+# 1. MSM and elliptic-curve arithmetic
 
-[Docs index](README.md) · Next: [2. Pippenger's bucket method](2-pippenger.md)
+[Docs index](README.md) · Next: [2. Big numbers and GPUs](2-hardware.md)
 
-## The problem
+## A dot product
 
-Given n elliptic-curve points `P_1 … P_n` and n scalars `k_1 … k_n`, compute
+A dot product multiplies two lists pairwise and adds up the results:
 
 ```
-Q = k_1·P_1 + k_2·P_2 + … + k_n·P_n
+(3, 5, 2) · (4, 1, 7) = 3·4 + 5·1 + 2·7 = 12 + 5 + 14 = 31
 ```
 
-This is a **multi-scalar multiplication (MSM)**. It is the most expensive step in many
-zero-knowledge provers (Groth16, PLONK and KZG commitments), with n in the millions and
-scalars about 253 bits long.
+A **multi-scalar multiplication (MSM)** has the same shape, except the second list holds
+elliptic-curve points instead of numbers:
+
+```
+(k_1, k_2, …, k_n) · (P_1, P_2, …, P_n) = k_1·P_1 + k_2·P_2 + … + k_n·P_n
+```
+
+The k_i are **scalars**: ordinary integers, about 253 bits long. The P_i are **points**: pairs
+(x, y) of 377-bit numbers that satisfy a curve equation. MSMs are the most expensive step in
+many zero-knowledge provers (Groth16, PLONK and KZG commitments), with n in the millions.
 
 Two properties of the real workload shape everything that follows:
 
@@ -22,21 +29,35 @@ Two properties of the real workload shape everything that follows:
 - **The scalars change every proof.** They come from the witness, so per-proof work is what
   matters.
 
-A useful way to see the points: in a KZG-style setup, `P_i = τ^i·G` for a secret τ, so an MSM
-with coefficients `c_i` evaluates a polynomial "in the exponent":
+## Adding two points
+
+The curves used here have the equation y² = x³ + b: b = 1 for BLS12-377 and b = 3 for BN254.
+Points on a curve can be added, and the rule has a picture. Over the real numbers, draw the line
+through P and Q; it meets the curve at exactly one more point; reflect that point across the
+x-axis, and the result is P + Q.
+
+![Adding two points on an elliptic curve, step by step](figures/ec_add.gif)
+
+In coordinates, with λ the slope of the line:
 
 ```
-Σ c_i·(τ^i·G) = (Σ c_i·τ^i)·G = P(τ)·G
+λ  = (y₂ − y₁) / (x₂ − x₁)
+x₃ = λ² − x₁ − x₂
+y₃ = λ(x₁ − x₃) − y₁
 ```
 
-The prover learns `P(τ)·G` without ever learning τ. The original 2022 prototype of Sagittal
-checked its answers exactly this way: evaluate `P(τ)` in the clear with the secret, then
-compare.
+Adding a point to itself (doubling) uses the tangent line instead, with slope λ = 3x₁² / (2y₁).
 
-## What it costs
+![Adding and doubling points](figures/ec_add.png)
 
-Points are added with field arithmetic: multiplications and squarings modulo a prime p (377 bits
-for BLS12-377). There are three kinds of point operation, and they cost different amounts:
+Real curves use the same formulas with every number taken modulo a large prime p (377 bits for
+BLS12-377). There the picture becomes a scatter of points, but the algebra is identical. There is
+also an identity point O (the "point at infinity"): P + O = P, and P + (−P) = O, where −P = (x, −y).
+
+**Division is the expensive part.** Modulo p, dividing means multiplying by an inverse, and an
+inverse costs hundreds of multiplications. So implementations keep a running denominator in
+extra coordinates (Jacobian, XYZZ) and divide only once at the very end. That turns one addition
+into about 10–16 field multiplications:
 
 | Operation | What it is | Field multiplications (XYZZ) | (Jacobian) |
 |---|---|---|---|
@@ -46,20 +67,57 @@ for BLS12-377). There are three kinds of point operation, and they cost differen
 
 Counts are multiplications plus squarings from the
 [Explicit-Formulas Database](https://hyperelliptic.org/EFD/g1p/auto-shortw.html) formulas this
-repo implements. The tests check every one against measured field operations. XYZZ coordinates
-are what the fastest GPU MSMs use.
+repo implements, and the tests check every one against measured field operations. XYZZ is what the
+fastest GPU MSMs use.
 
 ```mermaid
 flowchart LR
     F["Field ops<br/>mul, sqr, add mod p"] --> E["Curve ops<br/>add, mixed add, double"]
-    E --> M["MSM<br/>Σ k_i·P_i"]
+    E --> S["Scalar multiplication<br/>k·P"]
+    S --> M["MSM<br/>Σ k_i·P_i"]
 ```
 
-## The naive way
+## There is no multiply
 
-Compute each `k_i·P_i` with double-and-add (one doubling per bit, one addition per set bit),
-then sum. For 253-bit scalars that is about 252 doublings and 126 additions per point:
-**376 curve operations per point**, measured. Every algorithm in these docs exists to cut that
-number, or to make each operation cheaper to run in parallel.
+A curve has **only addition**. "k·P" is shorthand for adding P to itself k times:
 
-The next page shows the standard answer: [Pippenger's bucket method](2-pippenger.md).
+```
+5·P = P + P + P + P + P
+```
+
+There is no instruction that multiplies a point by a number, and no way to multiply two points
+together. Going backwards, recovering k from k·P, is the discrete logarithm problem. It is
+believed infeasible for these curves, and that is what makes them useful for cryptography.
+
+Adding P to itself 2²⁵³ times is impossible, so scalar multiplication uses **double-and-add**:
+read k's bits from the top, double at every bit and add P at every 1 bit. For k = 13 = 1101 in
+binary:
+
+| bit | step | value |
+|---|---|---|
+| 1 | start | P |
+| 1 | double, add P | 2P + P = 3P |
+| 0 | double | 6P |
+| 1 | double, add P | 12P + P = 13P |
+
+That is 3 doublings and 2 additions instead of 12 additions. A 253-bit scalar takes about
+252 doublings and 126 additions: **376 curve operations per point**, measured.
+
+## The naive MSM
+
+Do one double-and-add per point, then add up the n results: about 376·n curve operations. At
+n = 2^20 that is about 400 million curve operations, each costing 10–16 field multiplications.
+Each of those is itself hundreds of machine instructions, as the [next page](2-hardware.md)
+shows.
+
+A useful way to see the fixed points: in a KZG-style setup, `P_i = τ^i·G` for a secret τ, so an
+MSM with coefficients `c_i` evaluates a polynomial "in the exponent":
+
+```
+Σ c_i·(τ^i·G) = (Σ c_i·τ^i)·G = P(τ)·G
+```
+
+The prover computes `P(τ)·G` without ever learning τ. The original 2022 prototype of Sagittal
+checked its answers exactly this way: evaluate `P(τ)` in the clear with the secret, then compare.
+
+[Docs index](README.md) · Next: [2. Big numbers and GPUs](2-hardware.md)

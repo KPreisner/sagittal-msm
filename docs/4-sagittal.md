@@ -1,6 +1,6 @@
-# 3. Sagittal MSM
+# 4. Sagittal MSM
 
-[Docs index](README.md) · Previous: [2. Pippenger](2-pippenger.md) · Next: [4. Why it suits GPUs](4-gpu.md)
+[Docs index](README.md) · Previous: [3. Pippenger](3-pippenger.md) · Next: [5. Why it suits GPUs](5-gpu.md)
 
 The sagittal plane divides a body into left and right. Sagittal MSM divides the scalar bit
 matrix the other way from Pippenger: instead of strips c bits wide and n rows tall, it uses
@@ -51,6 +51,20 @@ flowchart LR
         A --> H["combine<br/>Horner over b buckets<br/>(b − 1 doublings)"]
     end
 ```
+
+Here it is on 8 points with 8-bit scalars and g = 4. First, once per proving key, each
+batch gets its own table holding every combination of its points: one table for P1..P4 and one for
+P5..P8 (n points in batches of g need n/g tables).
+They are combinations, not permutations: addition doesn't care about order, so a batch of 4 has
+2⁴ − 1 = 15 nonempty subsets, built with 11 additions.
+
+![Building the precomputed tables, one entry at a time](figures/tables.gif)
+
+Then, for every proof, each highlighted block's bits select one of those table entries, which is
+added to the bucket for that bit. The bit patterns are written in the same order in both
+animations, so `0101` is the entry P2 + P4 in each:
+
+![Sagittal accumulation, one block at a time](figures/sagittal.gif)
 
 ## A worked example
 
@@ -137,5 +151,4 @@ Sagittal combines these in a particular way:
 - every bucket's work is fixed before any scalar is seen;
 - nothing is left to reduce after accumulation.
 
-The [next page](4-gpu.md) shows why that combination maps so well to a GPU, and
-[the results](5-results.md) show what it costs.
+[Docs index](README.md) · Previous: [3. Pippenger](3-pippenger.md) · Next: [5. Why it suits GPUs](5-gpu.md)

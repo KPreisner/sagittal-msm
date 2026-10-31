@@ -18,7 +18,7 @@ and faster than all entries but one (Yrrid, 48 ms) on an A10G.
 ![MSM time at 2^20 points on a V100 and an A10G](benchmarks/results/gpu_2023.png)
 
 How each entry was timed, and all sizes including where Sagittal lost:
-[Results](docs/5-results.md).
+[Results](docs/6-results.md).
 
 ## The idea
 
@@ -26,6 +26,8 @@ Write the scalars as rows of bits. Pippenger's bucket method cuts that matrix in
 wide and n rows tall. Sagittal cuts it into blocks **1 bit wide and g rows tall**:
 
 ![Pippenger and Sagittal slicing the scalar bit matrix](docs/figures/slicing.png)
+
+![Sagittal accumulation, one block at a time](docs/figures/sagittal.gif)
 
 A block's g bits select one subset sum of its g points. The points are the proving key, fixed
 for every proof, so all subset sums are **precomputed once**. Each proof then does one table
@@ -52,12 +54,15 @@ addition is the cheap mixed kind.
 
 ## Docs
 
-1. [Multi-scalar multiplication](docs/1-msm.md): the problem and what curve operations cost
-2. [Pippenger's bucket method](docs/2-pippenger.md): the standard approach and its variants
-3. [Sagittal MSM](docs/3-sagittal.md): the algorithm, a worked example, costs, prior work
-4. [Why Sagittal suits GPUs](docs/4-gpu.md): the CUDA design and the memory limit
-5. [Results](docs/5-results.md): GPU timings, operation counts, precompute, memory
-6. [Methodology](docs/6-methodology.md): how every number is produced and tested
+1. [MSM and elliptic-curve arithmetic](docs/1-msm.md): dot products of points, adding points,
+   why there is no multiply
+2. [Big numbers and GPUs](docs/2-hardware.md): 377-bit arithmetic on 32-bit hardware, GPU memory,
+   why data-dependent work is costly
+3. [Pippenger's bucket method](docs/3-pippenger.md): the standard approach and its variants
+4. [Sagittal MSM](docs/4-sagittal.md): the algorithm, a worked example, costs, prior work
+5. [Why Sagittal suits GPUs](docs/5-gpu.md): design goals, the CUDA design, the memory limit
+6. [Results](docs/6-results.md): GPU timings, operation counts, precompute, memory
+7. [Methodology](docs/7-methodology.md): how every number is produced and tested
 
 ## Quick start
 
