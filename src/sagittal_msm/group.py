@@ -8,6 +8,7 @@ counts its own operations in its `counter`:
 - `add`        full addition of two accumulator points
 - `add_mixed`  accumulator + a normalized (affine) point, which is cheaper on real curves
 - `double`     point doubling
+- `neg`        negation, one field subtraction on real curves
 - `normalize`  conversion to affine, one count per point (batched on real curves)
 """
 

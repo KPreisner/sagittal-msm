@@ -5,10 +5,10 @@ import pytest
 from sagittal_msm.groups import GROUPS, MockGroup, get_group
 from sagittal_msm.inputs import expected_msm, random_points, random_scalars
 from sagittal_msm.msm import naive, sagittal
+from tests.helpers import group_sizes
 
 
-@pytest.mark.parametrize("name", sorted(GROUPS))
-@pytest.mark.parametrize("n", [1, 7, 33])
+@pytest.mark.parametrize(("name", "n"), group_sizes(sorted(GROUPS), [1, 7, 33]))
 @pytest.mark.parametrize("batch_size", [1, 2, 5, 8])
 def test_sagittal_matches_reference(name: str, n: int, batch_size: int) -> None:
     group = get_group(name)
