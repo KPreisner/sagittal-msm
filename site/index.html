@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sagittal MSM</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M5 3v10M8 3v10M11 3v10' stroke='white' stroke-width='1.6'/%3E%3C/svg%3E">
+<meta name="description" content="Sagittal MSM explained step by step: elliptic-curve arithmetic, GPUs, Pippenger's bucket method, and the Sagittal algorithm, with interactive animations and results.">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f9f9f7;
+    --surface: #fcfcfb;
+    --border: rgba(11, 11, 11, 0.1);
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --muted: #898781;
+    --track: #e1e0d9;
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --code-bg: #f0efec;
+    --sagittal: #2a78d6;
+    --pippenger: #eb6834;
+    --result: #1baf7a;
+    --curve: #8a8983;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0d0d0d;
+      --surface: #1a1a19;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #f0efec;
+      --text-2: #c3c2b7;
+      --muted: #898781;
+      --track: #2c2c2a;
+      --accent: #3987e5;
+      --accent-ink: #ffffff;
+      --code-bg: #232322;
+      --sagittal: #3987e5;
+      --pippenger: #d95926;
+      --result: #199e70;
+      --curve: #a3a29b;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --border: rgba(255, 255, 255, 0.1);
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --muted: #898781;
+    --track: #2c2c2a;
+    --accent: #3987e5;
+    --accent-ink: #ffffff;
+    --code-bg: #232322;
+    --sagittal: #3987e5;
+    --pippenger: #d95926;
+    --result: #199e70;
+    --curve: #a3a29b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 32px 16px 48px; }
+  header h1 { margin: 0 0 4px; font-size: 30px; }
+  header .lede { margin: 0 0 10px; color: var(--text-2); max-width: 70ch; }
+  header nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+  a { color: var(--accent); }
+  h2 { margin: 48px 0 8px; font-size: 22px; scroll-margin-top: 16px; }
+  h3 { margin: 24px 0 6px; font-size: 17px; }
+  p, li { max-width: 72ch; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre {
+    background: var(--code-bg);
+    padding: 12px 14px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .toc {
+    margin-top: 20px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 15px;
+  }
+  .toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  @media (max-width: 640px) { .toc ol { columns: 1; } }
+  .headline {
+    margin: 20px 0 0;
+    padding: 16px 18px;
+    border-left: 4px solid var(--sagittal);
+    background: var(--surface);
+    border-radius: 0 10px 10px 0;
+    max-width: none;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin: 16px 0;
+    min-width: 0;
+  }
+  .card svg { display: block; width: 100%; height: auto; }
+  .controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .step-count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .caption { margin: 10px 0 0; min-height: 3.2em; color: var(--text); max-width: none; }
+  .caption .sub { color: var(--text-2); }
+  .options { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-top: 10px;
+             font-size: 14px; color: var(--text-2); }
+  .options label { display: inline-flex; gap: 6px; align-items: center; }
+  .options input[type="range"] { accent-color: var(--accent); width: 180px; }
+  .options input[type="number"] {
+    width: 9em; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  table { border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 4px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-2); font-weight: 600; }
+  .scroll { overflow-x: auto; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px;
+           margin: 16px 0; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+          padding: 12px 14px; }
+  .stat .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .label { color: var(--text-2); font-size: 13px; }
+  figure { margin: 16px 0; }
+  figure img {
+    display: block; width: 100%; height: auto; border-radius: 10px;
+    background: #fcfcfb; border: 1px solid var(--border);
+  }
+  figcaption { color: var(--text-2); font-size: 14px; margin-top: 6px; max-width: 72ch; }
+  .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .tier { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+  .tier b { display: block; }
+  .tier span { color: var(--text-2); font-size: 14px; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-2);
+            margin-top: 8px; }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+            vertical-align: -1px; margin-right: 5px; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border);
+           padding-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Sagittal MSM</h1>
+  <p class="lede">A multi-scalar multiplication algorithm for zero-knowledge provers, invented by
+    Karl Preisner in 2022 and built for GPUs at Sindri Labs in 2023. This page explains it from the
+    ground up, with step-by-step animations.</p>
+  <nav>
+    <a href="https://github.com/KPreisner/sagittal-msm">Source on GitHub</a>
+    <a href="https://github.com/KPreisner/sagittal-msm/tree/main/docs">Full docs</a>
+    <a href="https://karl.preisner.us/">karl.preisner.us</a>
+  </nav>
+  <p class="headline">On BLS12-377 at 2<sup>20</sup> points, with the proving key precomputed
+    once and reused across proofs, Sagittal ran an MSM in 64 ms: 1.7× faster than every ZPrize
+    2022 GPU entry that runs on a V100, and faster than all entries but one (Yrrid, 48 ms) on an
+    A10G.</p>
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a href="#msm">MSM and elliptic-curve arithmetic</a></li>
+      <li><a href="#hardware">Big numbers and GPUs</a></li>
+      <li><a href="#pippenger">Pippenger's bucket method</a></li>
+      <li><a href="#sagittal">Sagittal MSM</a></li>
+      <li><a href="#gpu">Why Sagittal suits GPUs</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#methodology">How the numbers are made</a></li>
+    </ol>
+  </nav>
+</header>
+
+<noscript><p class="card">The animations on this page need JavaScript. The
+  <a href="https://github.com/KPreisner/sagittal-msm/tree/main/docs">docs on GitHub</a> cover the
+  same material with static figures.</p></noscript>
+
+<!-- 1 ------------------------------------------------------------------------------------ -->
+<section>
+<h2 id="msm">1. MSM and elliptic-curve arithmetic</h2>
+
+<h3>A dot product</h3>
+<p>A dot product multiplies two lists pairwise and adds up the results. A
+  <strong>multi-scalar multiplication (MSM)</strong> has the same shape, except the second list
+  holds elliptic-curve points instead of numbers. Step through both:</p>
+<div class="card" id="dot">
+  <div class="scroll"><div data-view class="mono" style="font-size:17px;line-height:2"></div></div>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
+<p>The scalars k<sub>i</sub> are ordinary integers, about 253 bits long. The points
+  P<sub>i</sub> are pairs (x, y) of 377-bit numbers. In a zero-knowledge prover the
+  <strong>points are fixed</strong> (they come from the proving key and are the same for every
+  proof of a circuit) and the <strong>scalars change every proof</strong>. Anything computed
+  from the points alone can be computed once and reused.</p>
+
+<h3>Adding two points</h3>
+<p>The curves here have the equation y² = x³ + b (b = 1 for BLS12-377). Over the real numbers,
+  adding two points has a picture: draw the line through P and Q, find where it meets the curve
+  again, and reflect across the x-axis. Real curves use the same formulas with every number
+  taken modulo a 377-bit prime.</p>
+<div class="card" id="ecadd">
+  <svg data-view viewBox="0 0 640 400" role="img" aria-label="Elliptic curve point addition"></svg>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+  <div class="options">
+    <label>Move Q <input type="range" data-q min="-0.6" max="2.0" step="0.01" value="1.5"></label>
+    <label><input type="checkbox" data-double> Double P (Q = P: use the tangent)</label>
+  </div>
+</div>
+<pre>λ  = (y₂ − y₁) / (x₂ − x₁)      for doubling: λ = 3x₁² / (2y₁)
+x₃ = λ² − x₁ − x₂
+y₃ = λ(x₁ − x₃) − y₁</pre>
+<p>Modulo p, dividing means multiplying by an inverse, which costs hundreds of multiplications.
+  So implementations carry a running denominator in extra coordinates and divide once at the
+  end. One addition then costs about 10–16 field multiplications: <strong>10</strong> for a
+  mixed add (accumulator + stored point), <strong>14</strong> for a full add and
+  <strong>9</strong> for a doubling, in XYZZ coordinates.</p>
+
+<h3>There is no multiply</h3>
+<p>A curve has <strong>only addition</strong>. "k·P" means adding P to itself k times. There is
+  no way to multiply a point by a number directly, or to multiply two points, and recovering k
+  from k·P (the discrete logarithm) is believed infeasible. That is what makes these curves
+  useful for cryptography. Instead, <strong>double-and-add</strong> reads k's bits from the top:
+  double at every bit, add P at every 1.</p>
+<div class="card" id="dbladd">
+  <div class="options" style="margin-top:0">
+    <label>k = <input type="number" data-k min="1" max="1000000000" value="13"></label>
+  </div>
+  <div class="scroll"><table data-view style="margin-top:10px"></table></div>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
+<p>A 253-bit scalar takes about 252 doublings and 126 additions: <strong>376 curve operations
+  per point</strong>, measured. A naive MSM does that for every point, about 400 million curve
+  operations at 2<sup>20</sup> points.</p>
+</section>
+
+<!-- 2 ------------------------------------------------------------------------------------ -->
+<section>
+<h2 id="hardware">2. Big numbers and GPUs</h2>
+<h3>Numbers bigger than a machine word</h3>
+<p>A <strong>machine word</strong> is the size of number a processor handles in one instruction:
+  64 bits on a CPU and 32 bits for a GPU's integer units. A 377-bit number is stored as 12 words
+  of 32 bits, and multiplying two of them works like long multiplication on paper, one word
+  pair at a time:</p>
+<div class="card" id="limbs">
+  <svg data-view viewBox="0 0 640 330" role="img" aria-label="A 377-bit multiplication as 32-bit word products"></svg>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
+<p>That is about <strong>300 word multiply-adds per field multiplication</strong> (Montgomery
+  multiplication, CIOS: 2s² + s for s = 12 words), and about <strong>3,000 per curve
+  addition</strong>. Sindri's GPU code stored values in Montgomery form, which lets the reduction
+  mod p use multiplications instead of division.</p>
+
+<h3>GPU memory and threads</h3>
+<p>A GPU runs thousands of threads in groups of 32 called warps. A warp executes one instruction
+  for all 32 threads together, so threads that need to do different things wait for each other.
+  Memory comes in tiers:</p>
+<div class="tiers">
+  <div class="tier"><b>Registers</b><span>Up to 255 × 32-bit per thread. One XYZZ accumulator
+    alone takes 48.</span></div>
+  <div class="tier"><b>Shared memory</b><span>48 KB per block by default, on-chip. Holds one
+    Sagittal table for g ≤ 9.</span></div>
+  <div class="tier"><b>Global memory</b><span>16–48 GB, hundreds of cycles away. Points, scalars
+    and precomputed tables.</span></div>
+  <div class="tier"><b>Host memory</b><span>Across PCIe. Where Sagittal combines its 253
+    buckets.</span></div>
+</div>
+
+<h3>Why data-dependent work is costly</h3>
+<p>In Pippenger's bucket method the bucket a point goes to depends on its scalar, so many threads
+  can target the same bucket at once. A bucket update is a curve addition (about 3,000
+  multiply-adds), not one instruction, so the GPU's atomic add can't do it: threads must take
+  turns, or the points must be sorted by bucket first. Draw new scalars and compare one warp of
+  32 threads:</p>
+<div class="card" id="contention">
+  <svg data-view viewBox="0 0 640 300" role="img" aria-label="Thread contention: Pippenger buckets vs Sagittal buckets"></svg>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls"><button class="primary" data-shuffle>New random scalars</button></div>
+</div>
+<p>Fast implementations avoid the collisions by sorting points by bucket and balancing bucket
+  sizes, and the ZPrize winners do that very well. But it is extra work every proof. An algorithm
+  whose work is fixed in advance doesn't pay it.</p>
+</section>
+
+<!-- 3 ------------------------------------------------------------------------------------ -->
+<section>
+<h2 id="pippenger">3. Pippenger's bucket method</h2>
+<p>Every fast MSM builds on this. Write each scalar in base 2<sup>c</sup>: c-bit digits called
+  windows. In each window every point goes into the <strong>bucket</strong> for its digit. Then
+  a running sum from the top bucket down computes Σ d·bucket[d] with about two additions per
+  bucket, and windows are combined by doubling c times between them. Step through 8 scalars with
+  c = 4:</p>
+<div class="card" id="pip">
+  <svg data-view viewBox="0 0 640 330" role="img" aria-label="Pippenger bucket method"></svg>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
+<p>The best window grows with n: c = 17 at 2<sup>20</sup> points, which means 15 windows ×
+  65,536 buckets ≈ 983,000 buckets, filled by the data. The ZPrize 2022 winners (Yrrid and
+  MatterLabs) also precompute shifted copies of every point so all windows fold into a few bucket
+  sets.</p>
+</section>
+
+<!-- 4 ------------------------------------------------------------------------------------ -->
+<section>
+<h2 id="sagittal">4. Sagittal MSM</h2>
+<p>Pippenger cuts the scalar bit matrix into strips c bits wide and n rows tall. Sagittal cuts it
+  into blocks <strong>1 bit wide and g rows tall</strong>. A block's g bits select one
+  <em>subset sum</em> of its batch's points. That sum depends only on the points, so every subset
+  sum is <strong>precomputed once per proving key</strong>.</p>
+<figure>
+  <img src="img/slicing.png" alt="Pippenger strips versus Sagittal blocks on the same bit matrix" loading="lazy">
+</figure>
+
+<h3>Step 1, once per proving key: build the tables</h3>
+<p>Each batch of g points gets its own table holding every combination (not permutation: P1 + P2
+  = P2 + P1) of its points: 2<sup>g</sup> − 1 entries, each built with one addition from two
+  entries built earlier. Here, 8 points in batches of g = 4 need 2 tables:</p>
+<div class="card" id="tables">
+  <div class="scroll"><table data-view></table></div>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
+
+<h3>Step 2, every proof: look up and add</h3>
+<p>For each batch and each bit, the g scalar bits form a pattern that picks one table entry, added
+  to the bucket for that bit. There is one bucket per scalar bit. The bit patterns match the
+  table above: <span class="mono">0101</span> is P2 + P4 in both.</p>
+<div class="card" id="accumulate">
+  <svg data-view viewBox="0 0 640 260" role="img" aria-label="Sagittal accumulation"></svg>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
+<p>Finally the b buckets are combined with Horner's rule, b − 1 doublings in total (about 500
+  operations for 253-bit scalars, whatever n is). There is <strong>no bucket reduction</strong>,
+  every bucket gets exactly one lookup per batch, and every addition is the cheap mixed kind.</p>
+<p>One batch on its own is Straus's method (Shamir's trick). What Sagittal adds is the bit-major
+  slicing, offline tables over a fixed proving key, and a schedule fixed before any scalar is
+  read.</p>
+</section>
+
+<!-- 5 ------------------------------------------------------------------------------------ -->
+<section>
+<h2 id="gpu">5. Why Sagittal suits GPUs</h2>
+<p>At 2<sup>20</sup> points Sagittal does <em>more</em> curve operations than a tuned Pippenger.
+  It still ran faster on GPUs in 2023, because of the shape of its work:</p>
+<div class="stats">
+  <div class="stat"><div class="value">253</div><div class="label">Sagittal buckets, all equally
+    loaded</div></div>
+  <div class="stat"><div class="value">983,040</div><div class="label">Pippenger buckets
+    (c = 17), loads depend on the data</div></div>
+  <div class="stat"><div class="value">504</div><div class="label">Sagittal operations after
+    accumulation</div></div>
+  <div class="stat"><div class="value">1.87M</div><div class="label">Pippenger operations after
+    accumulation</div></div>
+</div>
+<ul>
+  <li><strong>Thread = bit, block = batch.</strong> Every thread does one lookup and one addition
+    per batch, so warps don't diverge.</li>
+  <li><strong>Tables in shared memory.</strong> A batch's 2<sup>g</sup> entries of 96 bytes fit in
+    48 KB for g ≤ 9.</li>
+  <li><strong>A fixed order.</strong> The fastest kernel spreads blocks over 256 copies of the
+    buckets by block number, not by the data, and the 253 final buckets are combined on the CPU.</li>
+</ul>
+<figure>
+  <img src="img/structure.png" alt="Where per-proof work goes at 2^20 points" loading="lazy">
+  <figcaption>All of Sagittal's work is accumulation. Most of the Yrrid configuration's work at
+    this size is bucket reduction, which waits for accumulation to finish.</figcaption>
+</figure>
+<p><strong>The catch is memory.</strong> Tables hold (2<sup>g</sup> − 1)/g points per input point,
+  so large MSMs force small g. On a 16 GiB V100 the largest g that fits is 8 at 2<sup>22</sup>
+  and 5 at 2<sup>24</sup>, exactly what the 2023 runs used.</p>
+<figure>
+  <img src="img/memory.png" alt="Per-proof field multiplications under GPU memory limits" loading="lazy">
+</figure>
+</section>
+
+<!-- 6 ------------------------------------------------------------------------------------ -->
+<section>
+<h2 id="results">6. Results</h2>
+<figure>
+  <img src="img/gpu_2023.png" alt="MSM time at 2^20 points on a V100 and an A10G" loading="lazy">
+  <figcaption>May 2023, BLS12-377, one GPU. Setup and precompute are excluded for every entry.
+    Yrrid and MatterLabs + Yrrid require Ampere GPUs and did not run on the V100. At 2<sup>22</sup>
+    and 2<sup>24</sup> Sagittal lost: see the
+    <a href="https://github.com/KPreisner/sagittal-msm/blob/main/benchmarks/results/gpu_2023.md">full table</a>.</figcaption>
+</figure>
+<div class="scroll">
+<table>
+  <tr><th>At 2<sup>20</sup>, per point</th><th>Curve operations</th><th>Field multiplications</th></tr>
+  <tr><td>Sagittal (g = 7)</td><td>35.8</td><td>358</td></tr>
+  <tr><td>Precomputed windows (Yrrid config)</td><td>19.1</td><td>247</td></tr>
+  <tr><td>Pippenger, signed digits (c = 17)</td><td>15.9</td><td>166</td></tr>
+</table>
+</div>
+<p>Against the Yrrid configuration on the same A10G, Sagittal does 1.87× more curve operations and
+  1.45× more field multiplications, but was only 1.33× slower (64 vs 48 ms). Field cost explains
+  most of the gap; the shape of the work explains the rest.</p>
+<figure>
+  <img src="img/compare.png" alt="Per-proof curve operations per point by MSM size" loading="lazy">
+  <figcaption>Sagittal's cost per point is flat in n. Pippenger's best window grows with n, so
+    its cost per point keeps falling.</figcaption>
+</figure>
+<p><strong>Precompute is cheap.</strong> Sagittal's tables cost 385 field multiplications per
+  point to build, about 5× less than the Yrrid configuration's shifted points (2,110). For a
+  single proof, Sagittal costs 743 per point against 2,357; the Yrrid configuration pulls ahead
+  only above 16 proofs per proving key.</p>
+</section>
+
+<!-- 7 ------------------------------------------------------------------------------------ -->
+<section>
+<h2 id="methodology">7. How the numbers are made</h2>
+<p>The <a href="https://github.com/KPreisner/sagittal-msm">repository</a> is a Python reference
+  implementation that counts every operation. Algorithms only call group operations inside named
+  phases, and the group counts them, so the counts always describe the code that ran. They run
+  on BN254, BLS12-377 and a 64-bit Goldilocks test curve (in Jacobian or XYZZ coordinates, with
+  field operations counted too), and on a fast counting group with the same structure. A
+  closed-form model, tested against measured counts within 2%, extends the comparison to
+  2<sup>24</sup> points.</p>
+<p>The animations above use small examples (8 points, 4–8-bit scalars) so every step fits on
+  screen. Every number on this page comes from <code>benchmarks/results/</code> or the 2023 GPU
+  logs, and the <a href="https://github.com/KPreisner/sagittal-msm/blob/main/docs/7-methodology.md">methodology
+  page</a> lists what they don't cover.</p>
+</section>
+
+<footer>
+  © 2022–2026 Karl Preisner ·
+  <a href="https://github.com/KPreisner/sagittal-msm/blob/main/LICENSE">PolyForm Strict 1.0.0</a> ·
+  <a href="https://github.com/KPreisner/sagittal-msm">Source</a> ·
+  <a href="https://karl.preisner.us/">karl.preisner.us</a>
+</footer>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

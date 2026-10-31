@@ -26,3 +26,6 @@ benchmarks/results-quick/
 .DS_Store
 .idea/
 .vscode/
+
+# Site build output
+_site/
