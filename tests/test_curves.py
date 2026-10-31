@@ -184,3 +184,20 @@ def test_measured_field_ops_equal_group_ops_times_costs(coords: str, algorithm: 
     for phase in ("accumulate", "reduce", "combine"):
         if phase in group_counts:
             assert field_counts[phase] == field_ops(group_counts[phase], coords), phase
+
+
+@pytest.mark.parametrize("name", ["bn254-jacobian", "bn254-xyzz"])
+def test_normalize_cost_per_point(name: str) -> None:
+    """Large-batch normalization approaches COSTS[...]["normalize"] per point."""
+    group = get_group(name)
+    assert isinstance(group, WeierstrassGroup)
+    _, _, pa, pb = projective_pair(group, 2)
+    batch = [pa, pb] * 500
+    group.counter.reset()
+    group.batch_normalize(batch)
+    measured = group.field.counter.as_dict()["other"]
+    want = COSTS[group.coords]["normalize"]
+    assert measured.pop("inv") == 1
+    for op, per_point in want.items():
+        assert abs(measured[op] / len(batch) - per_point) < 0.01
+    assert set(measured) == set(want)

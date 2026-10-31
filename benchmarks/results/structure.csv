@@ -1,0 +1,5 @@
+algorithm,buckets,mean_load,max_load,after_accumulation_ops,per_proof_mults_per_point,prepare_mults_per_point,device_gib
+"Sagittal (g = 7, logged GPU run)",253,148410.19,148720,504,358.1,385.1,1.83
+"Sagittal (g = 9, shared-memory limit)",253,116161.34,116323,504,280.3,1235.1,5.45
+"Pippenger, signed digits (c = 17)",983040,16.0,87,1873466,166.1,0.0,0.3
+"Precomputed windows (Yrrid: c = 23, 2 sets)",8388608,1.39,149935,14636820,247.3,2110.0,2.09

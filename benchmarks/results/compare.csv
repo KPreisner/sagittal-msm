@@ -1,33 +1,33 @@
 algorithm,log_n,params,model_ops_per_point,measured_ops_per_point,prepare_ops_per_point,storage_x_n,xyzz_field_mults_per_point,jacobian_field_mults_per_point
 Sagittal (g = 7),10,g=7,36.168,36.141,35.221,18.14,362.42,398.1
-"Pippenger, signed digits (best c)",10,"c=9, signed=True",35.659,35.689,0.0,1.0,411.7,460.46
-"Precomputed windows (Yrrid: c = 23, 2 sets)",10,"c=23, signed=True, sets=2",8202.053,8202.667,235.0,6.0,114826.6,131230.11
-"Pippenger, unsigned (best c)",10,"c=8, signed=False",39.773,39.771,0.0,1.0,458.69,513.04
+"Pippenger, signed digits (best c)",10,"c=9, signed=True",35.729,35.689,0.0,1.0,412.39,461.22
+"Precomputed windows (Yrrid: c = 23, 2 sets)",10,"c=23, signed=True, sets=2",8201.767,8202.667,235.0,6.0,114824.02,131227.32
+"Pippenger, unsigned (best c)",10,"c=8, signed=False",39.772,39.771,0.0,1.0,458.68,513.02
 Sagittal (g = 7),12,g=7,35.892,35.882,35.277,18.14,359.1,394.87
-"Pippenger, signed digits (best c)",12,"c=10, signed=True",28.956,29.05,0.0,1.0,314.47,349.49
-"Precomputed windows (Yrrid: c = 23, 2 sets)",12,"c=23, signed=True, sets=2",2059.413,2059.127,235.0,6.0,28829.64,32947.91
-"Pippenger, unsigned (best c)",12,"c=9, signed=False",31.993,31.639,0.0,1.0,347.78,386.57
+"Pippenger, signed digits (best c)",12,"c=11, signed=True",28.937,28.941,0.0,1.0,334.85,374.98
+"Precomputed windows (Yrrid: c = 23, 2 sets)",12,"c=23, signed=True, sets=2",2059.061,2059.127,235.0,6.0,28826.13,32944.06
+"Pippenger, unsigned (best c)",12,"c=9, signed=False",31.635,31.639,0.0,1.0,344.2,382.62
 Sagittal (g = 7),14,g=7,35.829,35.825,35.279,18.14,358.34,394.14
-"Pippenger, signed digits (best c)",14,"c=12, signed=True",24.134,24.199,0.0,1.0,262.31,291.65
-"Precomputed windows (Yrrid: c = 23, 2 sets)",14,"c=23, signed=True, sets=2",523.495,523.138,235.0,6.0,7326.46,8372.82
+"Pippenger, signed digits (best c)",14,"c=12, signed=True",24.205,24.199,0.0,1.0,263.03,292.43
+"Precomputed windows (Yrrid: c = 23, 2 sets)",14,"c=23, signed=True, sets=2",523.139,523.138,235.0,6.0,7322.89,8368.9
 "Pippenger, unsigned (best c)",14,"c=11, signed=False",25.823,25.825,0.0,1.0,280.78,312.2
 Sagittal (g = 7),16,g=7,35.814,,35.285,18.14,358.15,393.96
-"Pippenger, signed digits (best c)",16,"c=14, signed=True",20.752,,0.0,1.0,225.52,250.76
-"Precomputed windows (Yrrid: c = 23, 2 sets)",16,"c=23, signed=True, sets=2",139.5,,235.0,6.0,1949.15,2227.18
+"Pippenger, signed digits (best c)",16,"c=14, signed=True",20.824,,0.0,1.0,226.23,251.54
+"Precomputed windows (Yrrid: c = 23, 2 sets)",16,"c=23, signed=True, sets=2",139.143,,235.0,6.0,1945.57,2223.25
 "Pippenger, unsigned (best c)",16,"c=13, signed=False",22.35,,0.0,1.0,242.49,269.58
 Sagittal (g = 7),18,g=7,35.81,,35.286,18.14,358.1,393.91
 "Pippenger, signed digits (best c)",18,"c=16, signed=True",17.894,,0.0,1.0,194.08,215.76
-"Precomputed windows (Yrrid: c = 23, 2 sets)",18,"c=23, signed=True, sets=2",43.5,,235.0,6.0,600.19,684.99
+"Precomputed windows (Yrrid: c = 23, 2 sets)",18,"c=23, signed=True, sets=2",43.143,,235.0,6.0,596.61,681.05
 "Pippenger, unsigned (best c)",18,"c=15, signed=False",19.018,,0.0,1.0,206.32,229.38
 Sagittal (g = 7),20,g=7,35.809,,35.286,18.14,358.09,393.9
 "Pippenger, signed digits (best c)",20,"c=17, signed=True",15.893,,0.0,1.0,166.08,183.76
-"Precomputed windows (Yrrid: c = 23, 2 sets)",20,"c=23, signed=True, sets=2",19.5,,235.0,6.0,250.85,284.31
+"Precomputed windows (Yrrid: c = 23, 2 sets)",20,"c=23, signed=True, sets=2",19.143,,235.0,6.0,247.26,280.37
 "Pippenger, unsigned (best c)",20,"c=17, signed=False",16.768,,0.0,1.0,181.83,202.13
 Sagittal (g = 7),22,g=7,35.808,,35.286,18.14,358.08,393.89
 "Pippenger, signed digits (best c)",22,"c=20, signed=True",14.501,,0.0,1.0,157.02,174.52
-"Precomputed windows (Yrrid: c = 23, 2 sets)",22,"c=23, signed=True, sets=2",13.5,,235.0,6.0,150.96,168.45
-"Pippenger, unsigned (best c)",22,"c=18, signed=False",15.375,,0.0,1.0,160.75,177.87
+"Precomputed windows (Yrrid: c = 23, 2 sets)",22,"c=23, signed=True, sets=2",13.143,,235.0,6.0,147.39,164.53
+"Pippenger, unsigned (best c)",22,"c=18, signed=False",15.018,,0.0,1.0,157.18,173.95
 Sagittal (g = 7),24,g=7,35.808,,35.286,18.14,358.08,393.89
-"Pippenger, signed digits (best c)",24,"c=21, signed=True",13.25,,0.0,1.0,138.5,153.25
-"Precomputed windows (Yrrid: c = 23, 2 sets)",24,"c=23, signed=True, sets=2",12.0,,235.0,6.0,124.0,137.0
-"Pippenger, unsigned (best c)",24,"c=20, signed=False",13.75,,0.0,1.0,143.5,158.75
+"Pippenger, signed digits (best c)",24,"c=21, signed=True",13.322,,0.0,1.0,139.22,154.04
+"Precomputed windows (Yrrid: c = 23, 2 sets)",24,"c=23, signed=True, sets=2",11.643,,235.0,6.0,120.43,133.07
+"Pippenger, unsigned (best c)",24,"c=21, signed=False",13.643,,0.0,1.0,148.43,165.07

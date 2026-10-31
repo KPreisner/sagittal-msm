@@ -67,3 +67,32 @@ def test_best_pippenger_grows_with_n() -> None:
     r = get_group("mock-bls12-377").order
     small, large = model.best_pippenger(1 << 10, r), model.best_pippenger(1 << 20, r)
     assert small < large
+
+
+@pytest.mark.parametrize("signed", [False, True])
+@pytest.mark.parametrize("c", [1, 4, 7, 12, 23])
+def test_window_digit_model_matches_extracted_digits(c: int, signed: bool) -> None:
+    """Per window: nonzero digits, negative digits, and the busiest bucket's hits."""
+    from collections import Counter
+
+    from sagittal_msm.msm import pippenger
+
+    group = get_group("mock-bls12-377")
+    n = 20_000
+    scalars = random_scalars(group, n, seed=c)
+    windows = pippenger.num_windows(group.scalar_bits, c, signed)
+    digits = [pippenger.digits(k, c, windows, signed) for k in scalars]
+    for w, (segments, negatives) in enumerate(model._windows(n, group.order, c, signed)):
+        column = [ds[w] for ds in digits]
+        hits = Counter(abs(d) - 1 for d in column if d)
+        predicted_hits = sum(count * lam for count, lam in segments)
+        assert abs(sum(hits.values()) - predicted_hits) <= max(30, 0.03 * predicted_hits), w
+        assert abs(sum(d < 0 for d in column) - negatives) <= max(30, 0.03 * negatives), w
+        # The model's busiest bucket gets about the predicted number of hits (5 sigma).
+        index, busiest = 0, 0.0
+        start = 0
+        for count, lam in segments:
+            if lam > busiest:
+                index, busiest = start, lam
+            start += count
+        assert abs(hits[index] - busiest) <= 5 * busiest**0.5 + 2, w

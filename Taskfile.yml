@@ -34,9 +34,13 @@ tasks:
     cmds:
       - uv run python benchmarks/batch_size.py --log-n 10 --max-batch 10 --out benchmarks/results-quick
       - uv run python benchmarks/compare.py --max-measured-log-n 12 --out benchmarks/results-quick
+      - uv run python benchmarks/memory.py --out benchmarks/results-quick
+      - uv run python benchmarks/structure.py --out benchmarks/results-quick
 
   bench-full:
     desc: Full benchmarks into benchmarks/results/ (about 30 s)
     cmds:
       - uv run python benchmarks/batch_size.py
       - uv run python benchmarks/compare.py
+      - uv run python benchmarks/memory.py
+      - uv run python benchmarks/structure.py
