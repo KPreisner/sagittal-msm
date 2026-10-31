@@ -78,37 +78,6 @@ const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const term = (j) => `P${j}`;
 
 // ---------------------------------------------------------------------------------------------
-// 1. Dot product, then the same shape with points
-
-function dotProduct() {
-  const root = document.getElementById("dot");
-  const view = root.querySelector("[data-view]");
-  const a = [3, 5, 2], b = [4, 1, 7];
-  const hl = (s, on) => (on ? `<b style="color:var(--sagittal)">${s}</b>` : s);
-  const steps = [
-    () => [`(3, 5, 2) · (4, 1, 7)`, "A dot product of two lists of numbers."],
-    ...[0, 1, 2].map((i) => () => {
-      const parts = a.map((x, j) => hl(`${x}·${b[j]}`, j === i));
-      const partial = sum(a.slice(0, i + 1).map((x, j) => x * b[j]));
-      return [`${parts.join(" + ")} = ${partial}${i < 2 ? " + …" : ""}`,
-              `Multiply pair ${i + 1} (${a[i]}·${b[i]} = ${a[i] * b[i]}) and add it to the total.`];
-    }),
-    () => [`(3, 5, 2) · (P1, P2, P3) = ${hl("3·P1", true)} + ${hl("5·P2", true)} + ${hl("2·P3", true)}`,
-           "An MSM has the same shape with points in the second list. But a point can't be " +
-           "multiplied by a number directly…"],
-    () => [`(P1+P1+P1) + (P2+P2+P2+P2+P2) + (P3+P3)`,
-           "…so each k·P means adding P to itself k times: 2 + 4 + 1 additions, plus 2 to add " +
-           "the three results. With 253-bit scalars that would take ~2<sup>253</sup> additions, " +
-           "so k·P uses double-and-add instead (below)."],
-  ];
-  stepper(root, () => steps.length, (s) => {
-    const [line, caption] = steps[s]();
-    view.innerHTML = line;
-    return caption;
-  }, { interval: 1600 });
-}
-
-// ---------------------------------------------------------------------------------------------
 // 1. Elliptic-curve addition on y^2 = x^3 + 1 over the reals
 
 function ecAdd() {
@@ -186,6 +155,7 @@ function ecAdd() {
 // 1. Double-and-add
 
 function doubleAndAdd() {
+  const pts = (m) => (m === 1 ? "P" : `${m}P`); // the running value, as a multiple of P
   const root = document.getElementById("dbladd");
   const table = root.querySelector("[data-view]");
   const input = root.querySelector("[data-k]");
@@ -194,24 +164,29 @@ function doubleAndAdd() {
 
   function render(s) {
     const b = bits();
-    let value = 1, doubles = 0, adds = 0;
+    let value = 1, doubles = 0, adds = 0, lastOp = "";
     const rows = [`<tr><th>bit</th><th>step</th><th>value</th></tr>`,
-                  `<tr><td>${b[0]}</td><td>start</td><td>1P</td></tr>`];
+                  `<tr><td>${b[0]}</td><td>start with P</td><td>P</td></tr>`];
     for (let i = 1; i <= s; i++) {
+      const prev = value;
       value *= 2; doubles++;
-      let op = "double";
-      if (b[i] === "1") { value += 1; adds++; op = "double, add P"; }
+      let op = `double ${pts(prev)} → ${pts(value)}`;
+      if (b[i] === "1") { value += 1; adds++; op += `, add P → ${pts(value)}`; }
+      if (i === s) lastOp = op;
       const last = i === s;
       rows.push(`<tr${last ? ' style="background:color-mix(in srgb, var(--sagittal) 18%, transparent)"' : ""}>` +
-                `<td>${b[i]}</td><td>${op}</td><td>${value}P</td></tr>`);
+                `<td>${b[i]}</td><td>${op}</td><td>${pts(value)}</td></tr>`);
     }
     table.innerHTML = rows.join("");
-    if (s < b.length - 1) {
-      return `k = ${k()} = <span class="mono">${b}</span> in binary. Bit ${s + 2} of ${b.length}: ` +
-             `${b[s + 1] === "1" ? "double, then add P" : "double"}.`;
-    }
-    return `${k()}·P: <b>${doubles} doublings + ${adds} additions = ${doubles + adds} operations</b>, ` +
-           `instead of ${(k() - 1).toLocaleString()} additions one P at a time.`;
+    // Describe the row just added, with its bit highlighted in k's binary form.
+    const marked = [...b].map((bit, i) => (i === s ? `<b style="color:var(--sagittal)">${bit}</b>` : bit)).join("");
+    const binary = `k = ${k()} = <span class="mono">${marked}</span> in binary.`;
+    let what;
+    if (s === 0) what = `Bit 1 of ${b.length} is the leading 1: start with P.`;
+    else what = `Bit ${s + 1} of ${b.length} is ${b[s]}: ${lastOp}.`;
+    if (s < b.length - 1) return `${binary} ${what}`;
+    return `${binary} ${what} <b>${k()}·P took ${doubles} doublings + ${adds} additions = ` +
+           `${doubles + adds} operations</b>, instead of ${(k() - 1).toLocaleString()} additions one P at a time.`;
   }
   const s = stepper(root, () => bits().length, render, { interval: 800 });
   input.oninput = s.restart;
@@ -251,8 +226,9 @@ function limbs() {
       [s > N + 1 ? "× 10 per mixed add ≈ 3,000 per curve addition" : "", "var(--text-2)"],
     ];
     lines.forEach(([t, fill], i) => txt(svg, X + N * C + 24, 110 + i * 30, t, { fill, "font-size": 14 }));
-    if (s === 0) return "Each orange cell will be one 32 × 32 → 64-bit multiplication of a word of a by a word of b.";
-    if (s <= N) return `Row ${s}: word ${s} of a times all 12 words of b, with carries passed along.`;
+    const a = `<b style="color:var(--sagittal)">a</b>`, b = `<b style="color:var(--sagittal)">b</b>`;
+    if (s === 0) return `Each orange cell will be one 32 × 32 → 64-bit multiplication of a word of ${a} by a word of ${b}.`;
+    if (s <= N) return `Row ${s}: word ${s} of ${a} times all 12 words of ${b}, with carries passed along.`;
     if (s === N + 1) return "Then the 24-word product is reduced mod p (Montgomery): about 300 multiply-adds in all.";
     return "A mixed curve addition needs 10 field multiplications: about 3,000 word multiply-adds.";
   }
@@ -304,9 +280,10 @@ function contention() {
           (i) => ({ x: tx(i), color: "var(--sagittal)" }),
           Array.from({ length: T }, (_, i) => [tx(i), 1, "var(--sagittal)"]),
           "");
+    const hl = (x) => `<b style="color:var(--pippenger)">${x}</b>`;
     caption.innerHTML =
-      `Pippenger: ${colliding} of 32 threads hit a bucket another thread is also updating. The ` +
-      `busiest bucket gets ${busiest} updates, which must happen one after another (or the points ` +
+      `Pippenger: ${hl(colliding)} of 32 threads hit a bucket another thread is also updating. The ` +
+      `busiest bucket gets ${hl(busiest)} updates, which must happen one after another (or the points ` +
       `must be sorted by bucket first). Grey threads drew digit 0 and sit idle. ` +
       `<span class="sub">Sagittal: 32 threads, 32 buckets, no collisions, every thread busy.</span>`;
   }
@@ -387,15 +364,16 @@ function pippenger() {
     }
     const adds = sum(buckets.map((b) => Math.max(0, b.length - 1)));
     if (s === 0) return "8 scalars of 8 bits. With c = 4 there are two windows (bits 7–4 and 3–0) and 15 buckets per window.";
+    const hl = (x) => `<b style="color:var(--pippenger)">${x}</b>`;
     if (row !== null) {
-      const d = digit(row, w);
-      return d ? `k${row + 1}'s digit in this window is ${d.toString(2).padStart(4, "0")} = ${d}: P${row + 1} goes into bucket ${d}. ` +
-                 `<span class="sub">Additions so far in this window: ${adds}.</span>`
-               : `k${row + 1}'s digit in this window is 0: P${row + 1} is skipped.`;
+      const d = digit(row, w), k = hl(`k${row + 1}`);
+      return d ? `${k}'s digit in this window is ${d.toString(2).padStart(4, "0")} = ${hl(d)}: P${row + 1} goes into bucket ${hl(d)}. ` +
+                 `<span class="sub">Additions so far in this window: ${hl(adds)}.</span>`
+               : `${k}'s digit in this window is ${hl(0)}: P${row + 1} is skipped.`;
     }
     if (s <= placeSteps + WINDOWS) {
       return `Reduce this window: Σ d·bucket[d] with two running sums from the top bucket down, ` +
-             `${reduceCost(buckets)} more additions. This can only start once every bucket is final.`;
+             `${hl(reduceCost(buckets))} more additions. This can only start once every bucket is final.`;
     }
     return "Combine the windows: result = 2⁴·(high window) + (low window): 4 doublings and 1 addition. " +
            "<span class=\"sub\">At real sizes, buckets number in the hundreds of thousands.</span>";
@@ -455,6 +433,7 @@ function accumulate() {
   function render(s) {
     clear(svg);
     const current = s < steps.length ? steps[s] : null;
+    const combining = s > steps.length ? s - steps.length - 1 : null; // bucket rows combined so far
     drawMatrix(svg, current ? [current[1], current[0] * G, 1, G, "var(--sagittal)"] : null);
     el("line", { x1: MX, y1: MY + G * CELL, x2: MX + BITS * CELL, y2: MY + G * CELL,
                  stroke: "var(--text-2)", "stroke-width": 1.5 }, svg);
@@ -464,13 +443,15 @@ function accumulate() {
     const done = steps.slice(0, current ? s + 1 : steps.length);
     const bx = 330;
     txt(svg, bx, MY - 10, "bucket", { "font-size": 11, fill: "var(--text-2)" });
-    let additions = 0;
+    let additions = 0, bucketAdditions = 0;
     for (let col = 0; col < BITS; col++) {
       const y = MY + col * CELL + 17;
       const terms = done.filter(([b, c]) => c === col && subset(b, c).length).map(([b, c]) => `(${subset(b, c).map(term).join("+")})`);
       additions += Math.max(0, terms.length - 1);
-      if (current && current[1] === col) el("rect", { x: bx - 4, y: y - 15, width: 300, height: 21, rx: 3,
-                                                       fill: "var(--sagittal)", "fill-opacity": 0.14 }, svg);
+      if (current && current[1] === col) bucketAdditions = Math.max(0, terms.length - 1);
+      if ((current && current[1] === col) || (combining !== null && col <= combining))
+        el("rect", { x: bx - 4, y: y - 15, width: 300, height: 21, rx: 3, fill: "var(--sagittal)",
+                     "fill-opacity": combining !== null && col < combining ? 0.06 : 0.14 }, svg);
       txt(svg, bx, y, `bit ${BITS - 1 - col}`, { fill: "var(--text-2)", "font-size": 12 });
       txt(svg, bx + 46, y, terms.join(" + "), { "font-size": 12 });
     }
@@ -478,19 +459,32 @@ function accumulate() {
       const [batch, col] = current;
       const bits = [...Array(G).keys()].map((t) => MATRIX[batch * G + t][col]).join("");
       const chosen = subset(batch, col).map(term).join(" + ");
-      return `Batch ${batch + 1}, bit ${BITS - 1 - col}: bits <span class="mono">${bits}</span> → ` +
-             (chosen ? `table entry ${chosen} → bucket for bit ${BITS - 1 - col}.` : "all zeros, nothing to add.") +
-             ` <span class="sub">Additions into buckets so far: ${additions}.</span>`;
+      const hl = (x) => `<b style="color:var(--sagittal)">${x}</b>`, bit = hl(BITS - 1 - col);
+      return `Batch ${hl(batch + 1)}, bit ${bit}: bits <span class="mono">${bits}</span> → ` +
+             (chosen ? `table entry ${chosen} → bucket for bit ${bit}.` : "all zeros, nothing to add.") +
+             ` <span class="sub">Additions into bit ${bit}'s bucket so far: ${hl(bucketAdditions)}.</span>`;
     }
-    return `Every block done: 8 buckets, one per bit, ${additions} additions. Combine them with 7 doublings: ` +
-           `result = 2(…2(2·b7 + b6)…) + b0. <span class="sub">No bucket reduction, and each bucket's work was fixed in advance.</span>`;
+    if (combining === null) {
+      return `Every block done: 8 buckets, one per bit, ${additions} additions. Next, combine them from the top: ` +
+             `result = 2·result + bucket, once per bit.`;
+    }
+    const hl = (x) => `<b style="color:var(--sagittal)">${x}</b>`;
+    // Build the expression up to the previous bit, then add this step's 2 and bucket highlighted.
+    const step = (inner, k, two = "2", b = `b${BITS - 1 - k}`) => `${k === 1 ? `${two}·${inner}` : `${two}(${inner})`} + ${b}`;
+    let expr = `b${BITS - 1}`;
+    for (let k = 1; k < combining; k++) expr = step(expr, k);
+    expr = combining === 0 ? hl(expr) : step(expr, combining, hl("2"), hl(`b${BITS - 1 - combining}`));
+    const tail = combining === BITS - 1
+      ? ` <span class="sub">Done: ${BITS - 1} doublings for all n points. No bucket reduction, and each bucket's work was fixed in advance.</span>`
+      : "";
+    return `Combine, bit ${hl(BITS - 1 - combining)}: result = ${expr}. ` +
+           `<span class="sub">Doublings so far: ${hl(combining)}.</span>` + tail;
   }
-  stepper(root, () => steps.length + 1, render, { interval: 750 });
+  stepper(root, () => steps.length + 1 + BITS, render, { interval: 750 });
 }
 
 // ---------------------------------------------------------------------------------------------
 
-dotProduct();
 ecAdd();
 doubleAndAdd();
 limbs();

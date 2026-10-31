@@ -2,12 +2,13 @@
 
 [Docs index](README.md) · Previous: [2. Big numbers and GPUs](2-hardware.md) · Next: [4. Sagittal](4-sagittal.md)
 
-Every fast MSM, including the ZPrize 2022 winners, is built on the bucket method. Sagittal is
+Every fast MSM, including the [ZPrize 2022 winners](https://www.zprize.io/blog/announcing-zprize-results), is built on the bucket method ([Bernstein on Pippenger](https://cr.yp.to/papers/pippenger.pdf)). Sagittal is
 easiest to understand as a different way of slicing the same picture.
 
 ## Windows and buckets
 
-Write every scalar in base 2^c: a 253-bit scalar becomes W = ⌈253 / c⌉ digits of c bits each.
+With n points, write every scalar in base 2^c: a 253-bit scalar becomes W = ⌈253 / c⌉ digits
+of c bits each.
 For one window (one digit position), every point goes into the **bucket** for its digit:
 
 ```
@@ -52,13 +53,13 @@ grows: 28.9 curve operations per point at 2^12, 15.9 at 2^20, 13.3 at 2^24.
 
 ## Variants this repo implements
 
-- **Signed digits.** Digits in (−2^(c−1), 2^(c−1)] instead of [0, 2^c). A negative digit adds the
-  negated point, which costs a single field subtraction. This halves the bucket count and the
-  reduction.
+- **[Signed digits](glossary.md).** Digits in (−2^(c−1), 2^(c−1)] instead of [0, 2^c). A negative
+  digit adds the negated point, which costs a single field subtraction (flip the sign of y). This
+  halves the bucket count, to 2^(c−1) per window, and the reduction.
 - **Precomputed windows.** Store shifted copies `2^(j·s·c)·P_i` of every point. Then window w of
   `P_i` is just window `w mod s` of a copy, so all W windows fold into s bucket sets: fewer
   reductions and doublings, paid for once with precomputed doublings. This is how the ZPrize 2022
-  winners worked. [Yrrid](https://github.com/z-prize/2022-entries/tree/main/open-division/prize1-msm/prize1a-msm-gpu)
+  winners worked. [Yrrid](https://github.com/yrrid/submission-msm-gpu) ([all entries](https://github.com/z-prize/2022-entries/tree/main/open-division/prize1-msm/prize1a-msm-gpu))
   used c = 23, signed digits and 2 bucket sets, tuned for batches of 2^26 points.
 
 All three come from one implementation, [`msm/pippenger.py`](../src/sagittal_msm/msm/pippenger.py).
@@ -69,7 +70,7 @@ Plain Pippenger is the case with no copies.
 Pippenger's buckets are filled by the scalars, so on a GPU:
 
 - **There are many buckets.** At 2^20 with c = 17, signed digits: 15 windows × 65,536 buckets
-  ≈ 983,000 accumulators.
+  ≈ 983,000 accumulators (65,536 is 2^16, not 2^17, because signed digits halve the buckets).
 - **Their loads depend on the data.** Some buckets get far more points than others (and with
   textbook signed digits, the top window can send a large share of all points to one bucket).
   Fast GPU codes sort buckets by size and split the heavy ones.

@@ -68,6 +68,14 @@
     font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 920px; margin: 0 auto; padding: 32px 16px 48px; }
+  .dot-figure { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .dot-figure .card { margin: 0; }
+  .dot-label { color: var(--text-2); font-size: 13px; margin-bottom: 6px; }
+  .dot-line { font-size: 17px; line-height: 1.9; }
+  .dot-line .k { color: var(--sagittal); }
+  .dot-note { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .terms dt { font-weight: 600; margin-top: 14px; scroll-margin-top: 16px; }
+  .terms dd { margin: 2px 0 0; color: var(--text-2); max-width: 72ch; }
   .portfolio-bar {
     border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--track) 40%, transparent);
@@ -186,15 +194,20 @@
 <main>
 <header>
   <h1>Sagittal MSM</h1>
-  <p class="lede">A multi-scalar multiplication algorithm for zero-knowledge provers, invented by
-    Karl Preisner in 2022 and built for GPUs at Sindri Labs in 2023. This page explains it from the
-    ground up, with step-by-step animations.</p>
+  <p class="lede">A faster approach to multi-scalar multiplication (MSM) of elliptic-curve points,
+    one of the most expensive steps in zero-knowledge proving. This page explains it from the ground
+    up, with step-by-step animations.</p>
+  <p class="lede">I invented the mathematical approach in 2022, built Python operation models and a
+    C++ reference, then directed and reviewed the CPU and GPU implementations at <a href="https://github.com/Sindri-Labs">Sindri Labs</a> with
+    colleagues and a Draper Labs contractor. The benchmark results below were a crucial part of
+    the technical case behind Sindri's $5M seed round, led by <a href="https://www.coinfund.io">CoinFund</a>.</p>
   <nav>
     <a href="https://github.com/KPreisner/sagittal-msm">Source on GitHub</a>
     <a href="https://github.com/KPreisner/sagittal-msm/tree/main/docs">Full docs</a>
+    <a href="https://medium.com/@sindrilabs/sagittal-msm-a-streamlined-msm-implementation-a9dcc07da585">2023 write-up</a>
   </nav>
   <p class="headline">On BLS12-377 at 2<sup>20</sup> points, with the proving key precomputed
-    once and reused across proofs, Sagittal ran an MSM in 64 ms: 1.7× faster than every ZPrize
+    once and reused across proofs, Sagittal ran an MSM in 64 ms: 1.7× faster than every <a href="https://www.zprize.io/prizes/accelerating-msm-operations-on-gpu-fpga">ZPrize</a>
     2022 GPU entry that runs on a V100, and faster than all entries but one (Yrrid, 48 ms) on an
     A10G.</p>
   <nav class="toc" aria-label="Sections">
@@ -206,6 +219,7 @@
       <li><a href="#gpu">Why Sagittal suits GPUs</a></li>
       <li><a href="#results">Results</a></li>
       <li><a href="#methodology">How the numbers are made</a></li>
+      <li><a href="#terms">Terms and references</a></li>
     </ol>
   </nav>
 </header>
@@ -217,27 +231,47 @@
 <!-- 1 ------------------------------------------------------------------------------------ -->
 <section>
 <h2 id="msm">1. MSM and elliptic-curve arithmetic</h2>
+<p>A <strong><a href="https://en.wikipedia.org/wiki/Zero-knowledge_proof">zero-knowledge proof</a></strong> lets a prover convince a verifier that a computation
+  was done correctly without revealing its inputs. Most proof systems in use (<a href="https://eprint.iacr.org/2016/260">Groth16</a>, <a href="https://eprint.iacr.org/2019/953">PLONK</a>, and
+  anything built on <a href="https://dankradfeist.de/ethereum/2020/06/16/kate-polynomial-commitments.html">KZG polynomial commitments</a>) commit to large polynomials, and committing to a
+  polynomial with n coefficients is one MSM of n points. That is why MSMs dominate proving
+  time.</p>
 
 <h3>A dot product</h3>
 <p>A dot product multiplies two lists pairwise and adds up the results. A
   <strong>multi-scalar multiplication (MSM)</strong> has the same shape, except the second list
-  holds elliptic-curve points instead of numbers. Step through both:</p>
-<div class="card" id="dot">
-  <div class="scroll"><div data-view class="mono" style="font-size:17px;line-height:2"></div></div>
-  <p class="caption" data-caption aria-live="polite"></p>
-  <div class="controls" data-controls></div>
+  holds elliptic-curve points instead of numbers:</p>
+<div class="dot-figure" role="img" aria-label="A dot product of numbers, and the same shape with points">
+  <div class="card">
+    <div class="dot-label">Numbers: a dot product</div>
+    <div class="mono dot-line">(3, 5, 2) · (4, 1, 7)</div>
+    <div class="mono dot-line">= 3·4 + 5·1 + 2·7 = <b>31</b></div>
+    <div class="dot-note">3 multiplications, 2 additions</div>
+  </div>
+  <div class="card">
+    <div class="dot-label">Points: a multi-scalar multiplication</div>
+    <div class="mono dot-line">(3, 5, 2) · (P1, P2, P3)</div>
+    <div class="mono dot-line">= <b class="k">3</b>·P1 + <b class="k">5</b>·P2 + <b class="k">2</b>·P3</div>
+    <div class="dot-note">Each k·P means P + P + … + P, k times</div>
+  </div>
 </div>
 <p>The scalars k<sub>i</sub> are ordinary integers, about 253 bits long. The points
   P<sub>i</sub> are pairs (x, y) of 377-bit numbers. In a zero-knowledge prover the
   <strong>points are fixed</strong> (they come from the proving key and are the same for every
   proof of a circuit) and the <strong>scalars change every proof</strong>. Anything computed
   from the points alone can be computed once and reused.</p>
+<p><strong>Why 253 bits and 377 bits?</strong> There are two different primes. Coordinates are
+  numbers modulo p, a 377-bit prime: the <a href="#t-field">field</a>. The points themselves form
+  a group with r elements, where r is a 253-bit prime, so adding any point to itself r times gives
+  the identity point O (defined below) and only k mod r matters. Scalars are numbers modulo r; coordinates are numbers
+  modulo p.</p>
 
 <h3>Adding two points</h3>
-<p>The curves here have the equation y² = x³ + b (b = 1 for BLS12-377). Over the real numbers,
+<p>The curves here have the equation y² = x³ + b (b = 1 for <a href="https://eprint.iacr.org/2018/962">BLS12-377</a>). Over the real numbers,
   adding two points has a picture: draw the line through P and Q, find where it meets the curve
   again, and reflect across the x-axis. Real curves use the same formulas with every number
-  taken modulo a 377-bit prime.</p>
+  taken modulo a 377-bit prime. There is also an identity point O (the "point at infinity"):
+  P + O = P, and P + (−P) = O, where −P = (x, −y).</p>
 <div class="card" id="ecadd">
   <svg data-view viewBox="0 0 640 400" role="img" aria-label="Elliptic curve point addition"></svg>
   <p class="caption" data-caption aria-live="polite"></p>
@@ -252,15 +286,47 @@ x₃ = λ² − x₁ − x₂
 y₃ = λ(x₁ − x₃) − y₁</pre>
 <p>Modulo p, dividing means multiplying by an inverse, which costs hundreds of multiplications.
   So implementations carry a running denominator in extra coordinates and divide once at the
-  end. One addition then costs about 10–16 field multiplications: <strong>10</strong> for a
-  mixed add (accumulator + stored point), <strong>14</strong> for a full add and
-  <strong>9</strong> for a doubling, in XYZZ coordinates.</p>
+  end. A point stored as plain (x, y) is <strong>affine</strong>. <strong>Jacobian</strong>
+  coordinates store (X, Y, Z) with x = X/Z² and y = Y/Z³; <strong>XYZZ</strong> coordinates store
+  (X, Y, ZZ, ZZZ) with x = X/ZZ and y = Y/ZZZ, the form the fastest GPU MSMs use. One addition
+  then costs about 10–16 <a href="#t-field">field multiplications</a>: <strong>10</strong> for a
+  mixed add (a running sum + a stored affine point), <strong>14</strong> for a full add (two
+  running sums) and <strong>9</strong> for a doubling, in XYZZ.</p>
+<p>Sagittal's GPU <a href="#t-gpu">kernel</a> kept its running sums (the
+  <a href="#t-bucket">buckets</a> of sections 3 and 4) in Jacobian coordinates and its precomputed
+  table entries affine, so each lookup is a mixed add.
+  These are the exact formulas it ran, with every value in Montgomery form (see
+  <a href="#hardware">section 2</a>): each product or square is one Montgomery multiplication, and
+  additions and small multiples are ordinary modular additions.</p>
+<div class="scroll"><pre>Mixed add: (X1, Y1, Z1) + (x2, y2)        7 multiplications + 4 squarings
+  Z1Z1 = Z1²
+  U2   = x2 · Z1Z1                        x2 scaled to the bucket's denominator
+  S2   = y2 · Z1 · Z1Z1                   y2 scaled likewise
+  H    = U2 − X1                          x-difference (λ's denominator)
+  HH   = H²,   I = 4·HH,   J = H · I
+  r    = 2 · (S2 − Y1)                    y-difference (λ's numerator)
+  V    = X1 · I
+  X3   = r² − J − 2·V
+  Y3   = r · (V − X3) − 2 · Y1 · J
+  Z3   = (Z1 + H)² − Z1Z1 − HH            = 2·Z1·H, the new denominator
+
+Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
+  A = X1²,   B = Y1²,   C = B²
+  D = 2 · ((X1 + B)² − A − C)             = 4·X1·B
+  E = 3 · A,   F = E²                     3x² from the tangent slope 3x²/(2y)
+  X3 = F − 2·D
+  Y3 = E · (D − X3) − 8·C
+  Z3 = 2 · Y1 · Z1</pre></div>
+<p class="caption sub" style="min-height:0">From the
+  <a href="https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html">Explicit-Formulas
+  Database</a>, where they are <code>madd-2007-bl</code> (mixed addition, Bernstein and Lange,
+  2007) and <code>dbl-2009-l</code> (doubling, Lange, 2009).</p>
 
 <h3>There is no multiply</h3>
 <p>A curve has <strong>only addition</strong>. "k·P" means adding P to itself k times. There is
   no way to multiply a point by a number directly, or to multiply two points, and recovering k
-  from k·P (the discrete logarithm) is believed infeasible. That is what makes these curves
-  useful for cryptography. Instead, <strong>double-and-add</strong> reads k's bits from the top:
+  from k·P (the <a href="https://en.wikipedia.org/wiki/Discrete_logarithm">discrete logarithm</a>) is believed infeasible. That is what makes these curves
+  useful for cryptography. Instead, <strong><a href="https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication">double-and-add</a></strong> reads k's bits from the top:
   double at every bit, add P at every 1.</p>
 <div class="card" id="dbladd">
   <div class="options" style="margin-top:0">
@@ -288,14 +354,23 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   <p class="caption" data-caption aria-live="polite"></p>
   <div class="controls" data-controls></div>
 </div>
-<p>That is about <strong>300 word multiply-adds per field multiplication</strong> (Montgomery
-  multiplication, CIOS: 2s² + s for s = 12 words), and about <strong>3,000 per curve
-  addition</strong>. Sindri's GPU code stored values in Montgomery form, which lets the reduction
-  mod p use multiplications instead of division.</p>
+<p>The product then has to be reduced mod p back to 12 words. Done directly, that is a long
+  division, slower than the multiplication itself. <strong><a href="https://en.wikipedia.org/wiki/Montgomery_modular_multiplication">Montgomery form</a></strong> avoids it:
+  store each value a as a·R mod p, with R = 2<sup>384</sup>. Multiplying two stored values gives
+  abR², and getting back to abR means dividing by R, which for a power of 2 just drops the low
+  words. Values are converted in once at the start and out once at the end. Sindri's GPU code
+  kept everything in Montgomery form.</p>
+<p>The standard way to compute one Montgomery multiplication, <strong>CIOS</strong> (Coarsely
+  Integrated Operand Scanning; <a href="https://doi.org/10.1109/40.502403">Koç, Acar and Kaliski,
+  1996</a>), interleaves multiplying and reducing word by word. It takes
+  2s² + s word multiply-adds for s words: <strong>300 per field multiplication</strong>, and about
+  <strong>3,000 per curve addition</strong>.</p>
 
 <h3>GPU memory and threads</h3>
-<p>A GPU runs thousands of threads in groups of 32 called warps. A warp executes one instruction
-  for all 32 threads together, so threads that need to do different things wait for each other.
+<p>A GPU program is called a <strong>kernel</strong> (<a href="https://docs.nvidia.com/cuda/cuda-c-programming-guide/">CUDA guide</a>). It runs as thousands of threads, organized
+  two ways: <strong>blocks</strong> of up to 1,024 threads that share a block of fast on-chip
+  memory and can wait for each other, and <strong>warps</strong> of 32 threads that execute one
+  instruction together. Threads in a warp that need to do different things wait for each other.
   Memory comes in tiers:</p>
 <div class="tiers">
   <div class="tier"><b>Registers</b><span>Up to 255 × 32-bit per thread. One XYZZ accumulator
@@ -311,7 +386,8 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
 <h3>Why data-dependent work is costly</h3>
 <p>In Pippenger's bucket method the bucket a point goes to depends on its scalar, so many threads
   can target the same bucket at once. A bucket update is a curve addition (about 3,000
-  multiply-adds), not one instruction, so the GPU's atomic add can't do it: threads must take
+  multiply-adds), not one instruction, so the GPU's <strong>atomic add</strong> (a hardware
+  instruction that lets many threads add to the same number safely) can't do it: threads must take
   turns, or the points must be sorted by bucket first. Draw new scalars and compare one warp of
   32 threads:</p>
 <div class="card" id="contention">
@@ -327,8 +403,8 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
 <!-- 3 ------------------------------------------------------------------------------------ -->
 <section>
 <h2 id="pippenger">3. Pippenger's bucket method</h2>
-<p>Every fast MSM builds on this. Write each scalar in base 2<sup>c</sup>: c-bit digits called
-  windows. In each window every point goes into the <strong>bucket</strong> for its digit. Then
+<p>Every fast MSM builds on this (<a href="https://cr.yp.to/papers/pippenger.pdf">Bernstein on Pippenger</a>). With n points, write each scalar in base 2<sup>c</sup>:
+  c-bit digits called windows. In each window every point goes into the <strong>bucket</strong> for its digit. Then
   a running sum from the top bucket down computes Σ d·bucket[d] with about two additions per
   bucket, and windows are combined by doubling c times between them. Step through 8 scalars with
   c = 4:</p>
@@ -338,7 +414,8 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   <div class="controls" data-controls></div>
 </div>
 <p>The best window grows with n: c = 17 at 2<sup>20</sup> points, which means 15 windows ×
-  65,536 buckets ≈ 983,000 buckets, filled by the data. The ZPrize 2022 winners (Yrrid and
+  65,536 buckets ≈ 983,000 buckets, filled by the data. (65,536 is 2<sup>16</sup>, not
+  2<sup>17</sup>: <a href="#t-signed">signed digits</a> halve the buckets.) The <a href="https://www.zprize.io/blog/announcing-zprize-results">ZPrize 2022 winners</a> (<a href="https://github.com/yrrid/submission-msm-gpu">Yrrid</a> and
   MatterLabs) also precompute shifted copies of every point so all windows fold into a few bucket
   sets.</p>
 </section>
@@ -373,12 +450,22 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   <p class="caption" data-caption aria-live="polite"></p>
   <div class="controls" data-controls></div>
 </div>
-<p>Finally the b buckets are combined with Horner's rule, b − 1 doublings in total (about 500
-  operations for 253-bit scalars, whatever n is). There is <strong>no bucket reduction</strong>,
+<p>Finally the b buckets (b = 253 scalar bits) are combined with <strong><a href="https://en.wikipedia.org/wiki/Horner%27s_method">Horner’s rule</a></strong>:
+  start from the top bucket and repeat result = 2·result + bucket[i] down to bit 0, the same
+  doubling chain as <a href="#dbladd">double-and-add</a> with bucket i in place of P. That is
+  b − 1 doublings and b − 1 additions in total, about 500 operations whatever n is. There is <strong>no bucket reduction</strong>,
   every bucket gets exactly one lookup per batch, and every addition is the cheap mixed kind.</p>
-<p>One batch on its own is Straus's method (Shamir's trick). What Sagittal adds is the bit-major
-  slicing, offline tables over a fixed proving key, and a schedule fixed before any scalar is
-  read.</p>
+<p><strong>Relation to Straus's method.</strong> <a href="#t-straus">Straus's method</a> (also called Shamir's trick)
+  computes k1·P1 + … + kg·Pg for a handful of points by precomputing all 2<sup>g</sup> subset sums,
+  then running one double-and-add over all g scalars together. One Sagittal batch is exactly that.
+  What Sagittal adds:</p>
+<ul>
+  <li>every batch runs at once, with one bucket per bit, so the doublings are done only once for
+    all n points instead of once per batch;</li>
+  <li>the tables are built offline, once per fixed proving key;</li>
+  <li>every bucket's work is fixed before any scalar is read.</li>
+</ul>
+<p class="caption sub" style="min-height:0">Cost formulas and measured counts for every batch size g: <a href="https://github.com/KPreisner/sagittal-msm/blob/main/docs/4-sagittal.md">docs/4-sagittal.md</a>.</p>
 </section>
 
 <!-- 5 ------------------------------------------------------------------------------------ -->
@@ -415,6 +502,7 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
 <figure>
   <img src="img/memory.png" alt="Per-proof field multiplications under GPU memory limits" loading="lazy">
 </figure>
+<p class="caption sub" style="min-height:0">How the kernel maps batches to thread blocks and bits to threads, and why g stays at 9 or below: <a href="https://github.com/KPreisner/sagittal-msm/blob/main/docs/5-gpu.md">docs/5-gpu.md</a>.</p>
 </section>
 
 <!-- 6 ------------------------------------------------------------------------------------ -->
@@ -422,7 +510,7 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
 <h2 id="results">6. Results</h2>
 <figure>
   <img src="img/gpu_2023.png" alt="MSM time at 2^20 points on a V100 and an A10G" loading="lazy">
-  <figcaption>May 2023, BLS12-377, one GPU. Setup and precompute are excluded for every entry.
+  <figcaption>May 2023, BLS12-377, one GPU. The competitors are the <a href="https://github.com/z-prize/2022-entries/tree/main/open-division/prize1-msm/prize1a-msm-gpu">ZPrize 2022 GPU entries</a>. Setup and precompute are excluded for every entry.
     Yrrid and MatterLabs + Yrrid require Ampere GPUs and did not run on the V100. At 2<sup>22</sup>
     and 2<sup>24</sup> Sagittal lost: see the
     <a href="https://github.com/KPreisner/sagittal-msm/blob/main/benchmarks/results/gpu_2023.md">full table</a>.</figcaption>
@@ -432,9 +520,11 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   <tr><th>At 2<sup>20</sup>, per point</th><th>Curve operations</th><th>Field multiplications</th></tr>
   <tr><td>Sagittal (g = 7)</td><td>35.8</td><td>358</td></tr>
   <tr><td>Precomputed windows (Yrrid config)</td><td>19.1</td><td>247</td></tr>
-  <tr><td>Pippenger, signed digits (c = 17)</td><td>15.9</td><td>166</td></tr>
+  <tr><td>Pippenger, <a href="#t-signed">signed digits</a> (c = 17)</td><td>15.9</td><td>166</td></tr>
 </table>
 </div>
+<p>The <a href="#t-yrrid">Yrrid configuration</a> row models the parameters of Yrrid's
+  winning ZPrize entry (c = 23, signed digits, 2 bucket sets), not their code.</p>
 <p>Against the Yrrid configuration on the same A10G, Sagittal does 1.87× more curve operations and
   1.45× more field multiplications, but was only 1.33× slower (64 vs 48 ms). Field cost explains
   most of the gap; the shape of the work explains the rest.</p>
@@ -447,6 +537,7 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   point to build, about 5× less than the Yrrid configuration's shifted points (2,110). For a
   single proof, Sagittal costs 743 per point against 2,357; the Yrrid configuration pulls ahead
   only above 16 proofs per proving key.</p>
+<p class="caption sub" style="min-height:0">Field-cost weighting, precompute and memory in full: <a href="https://github.com/KPreisner/sagittal-msm/blob/main/docs/6-results.md">docs/6-results.md</a>.</p>
 </section>
 
 <!-- 7 ------------------------------------------------------------------------------------ -->
@@ -463,6 +554,70 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   screen. Every number on this page comes from <code>benchmarks/results/</code> or the 2023 GPU
   logs, and the <a href="https://github.com/KPreisner/sagittal-msm/blob/main/docs/7-methodology.md">methodology
   page</a> lists what they don't cover.</p>
+</section>
+
+<!-- Terms and references ----------------------------------------------------------------- -->
+<section>
+<h2 id="terms">Terms and references</h2>
+<dl class="terms">
+  <dt id="t-field">Field, field element, field multiplication</dt>
+  <dd>The numbers 0 to p − 1, where adding, subtracting, multiplying and dividing all wrap around
+    modulo the prime p. A field element is one such number; a field multiplication multiplies two
+    of them mod p. Curve coordinates are field elements.</dd>
+  <dt id="t-identity">Identity point O, and −P</dt>
+  <dd>The curve's "zero": P + O = P. The negative of P = (x, y) is −P = (x, −y), and
+    P + (−P) = O.</dd>
+  <dt id="t-proving-key">Circuit, proving key</dt>
+  <dd>A circuit is the computation being proved, written as arithmetic constraints. The proving
+    key is the fixed set of curve points (from a one-time setup) that every proof of that circuit
+    uses. Those points are the P<sub>i</sub> of the MSM.</dd>
+  <dt>Affine, Jacobian, XYZZ</dt>
+  <dd>Ways to store a point. Affine is plain (x, y). Jacobian is (X, Y, Z) with x = X/Z², y = Y/Z³.
+    XYZZ is (X, Y, ZZ, ZZZ) with x = X/ZZ, y = Y/ZZZ. The last two avoid division until the end.</dd>
+  <dt id="t-gpu">Kernel, thread block, warp, atomic add</dt>
+  <dd>A kernel is a program that runs on the GPU. Its threads are grouped into blocks (up to 1,024
+    threads sharing fast on-chip memory) and warps (32 threads running one instruction together).
+    An atomic add is a hardware instruction that lets many threads add to the same number without
+    losing updates; it works on single machine numbers, not on curve points.</dd>
+  <dt>n, b, c, g</dt>
+  <dd>n is the number of points (and scalars) in the MSM. b is the number of scalar bits (253 for
+    BLS12-377). c is Pippenger's window width in bits. g is Sagittal's batch size: points per
+    precomputed table.</dd>
+  <dt id="t-bucket">Bucket, table entry</dt>
+  <dd>A bucket is a running sum of points. In Pippenger there is one per possible digit value per
+    window; in Sagittal, one per scalar bit. A table entry is one precomputed subset sum of a
+    batch's points.</dd>
+  <dt id="t-signed">Signed digits</dt>
+  <dd>Pippenger window digits from −(2<sup>c−1</sup> − 1) to 2<sup>c−1</sup> instead of 0 to
+    2<sup>c</sup> − 1. A negative digit adds −P, which is nearly free (flipping the sign of y is
+    one field subtraction), so each window needs half as many buckets: 2<sup>c−1</sup> instead of
+    2<sup>c</sup>.</dd>
+  <dt id="t-straus">Straus's method, Shamir's trick</dt>
+  <dd>Two names for computing k1·P1 + … + kg·Pg by precomputing all 2<sup>g</sup> subset sums and
+    running one double-and-add over all g scalars together. Straus gave it as the solution to
+    <a href="https://doi.org/10.2307/2310929">Problem 5125</a> (Bellman and Straus, <em>American
+    Mathematical Monthly</em>, 1964); the same idea appears in
+    <a href="https://doi.org/10.1109/TIT.1985.1057074">ElGamal's 1985 signature paper</a>.
+    Textbook treatment: <a href="https://cacr.uwaterloo.ca/hac/about/chap14.pdf">Handbook of
+    Applied Cryptography, §14.6</a>.</dd>
+  <dt id="t-yrrid">Yrrid configuration</dt>
+  <dd>This project's model of the parameters Yrrid used in its winning ZPrize 2022 entry: window
+    c = 23, signed digits, and shifted point copies that fold all windows into 2 bucket sets. It is
+    a model of their algorithm's operation counts, not their code.</dd>
+  <dt>ZPrize</dt>
+  <dd>A 2022 competition to accelerate zero-knowledge proving. Its GPU MSM track (BLS12-377,
+    batches of 2<sup>26</sup> points) was led by Yrrid and MatterLabs, whose entries were later
+    combined into one (<a href="https://www.zprize.io/prizes/accelerating-msm-operations-on-gpu-fpga">challenge</a>, <a href="https://www.zprize.io/blog/announcing-zprize-results">results</a>, <a href="https://github.com/z-prize/2022-entries/tree/main/open-division/prize1-msm/prize1a-msm-gpu">entries</a>).</dd>
+  <dt>BLS12-377, BN254, Goldilocks</dt>
+  <dd>BLS12-377 and BN254 are curves widely used in zero-knowledge proofs (377- and 254-bit
+    fields; 253- and 254-bit scalars). Goldilocks is the prime 2<sup>64</sup> − 2<sup>32</sup> + 1,
+    popular because its numbers fit in a 64-bit word (used by <a href="https://github.com/0xPolygonZero/plonky2">Plonky2</a>); this project uses a small
+    test curve over it. BN254 is the curve behind Ethereum's pairing precompiles (<a href="https://eips.ethereum.org/EIPS/eip-197">EIP-197</a>).</dd>
+  <dt>V100, A10G, Ampere, sppark</dt>
+  <dd>The V100 (2017, Volta generation, 16 GB) and A10G (Ampere generation, 24 GB) are NVIDIA GPUs.
+    Ampere is the 2020 generation; Yrrid's code requires it. sppark is Supranational's open-source
+    GPU library for MSMs and field arithmetic (<a href="https://github.com/supranational/sppark">GitHub</a>); Sindri's kernel used its field and point types.</dd>
+</dl>
 </section>
 
 <footer>
