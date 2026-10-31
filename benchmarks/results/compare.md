@@ -8,9 +8,9 @@ Per-proof EC operations per point on `mock-bls12-377` (253-bit scalars). Generat
 | Algorithm | Storage | 2^10 | 2^12 | 2^14 | 2^16 | 2^18 | 2^20 | 2^22 | 2^24 |
 |---|---|---|---|---|---|---|---|---|---|
 | Sagittal (g = 7) | 18.1x | 36.2* | 35.9* | 35.8* | 35.8 | 35.8 | 35.8 | 35.8 | 35.8 |
-| Pippenger, signed digits (best c) | 1.0x | 35.7* | 29.0* | 24.1* | 20.8 | 17.9 | 15.9 | 14.5 | 13.3 |
-| Precomputed windows (Yrrid: c = 23, 2 sets) | 6.0x | 8,202.1* | 2,059.4* | 523.5* | 139.5 | 43.5 | 19.5 | 13.5 | 12.0 |
-| Pippenger, unsigned (best c) | 1.0x | 39.8* | 32.0* | 25.8* | 22.4 | 19.0 | 16.8 | 15.4 | 13.8 |
+| Pippenger, signed digits (best c) | 1.0x | 35.7* | 28.9* | 24.2* | 20.8 | 17.9 | 15.9 | 14.5 | 13.3 |
+| Precomputed windows (Yrrid: c = 23, 2 sets) | 6.0x | 8,201.8* | 2,059.1* | 523.1* | 139.1 | 43.1 | 19.1 | 13.1 | 11.6 |
+| Pippenger, unsigned (best c) | 1.0x | 39.8* | 31.6* | 25.8* | 22.3 | 19.0 | 16.8 | 15.0 | 13.6 |
 
 ### Field multiplications per point (XYZZ coordinates)
 
@@ -19,11 +19,11 @@ EC operations weighted by their field cost (mul + sqr, from `sagittal_msm/costs.
 | Algorithm | 2^10 | 2^12 | 2^14 | 2^16 | 2^18 | 2^20 | 2^22 | 2^24 |
 |---|---|---|---|---|---|---|---|---|
 | Sagittal (g = 7) | 362 | 359 | 358 | 358 | 358 | 358 | 358 | 358 |
-| Pippenger, signed digits (best c) | 412 | 314 | 262 | 226 | 194 | 166 | 157 | 139 |
-| Precomputed windows (Yrrid: c = 23, 2 sets) | 114,827 | 28,830 | 7,326 | 1,949 | 600 | 251 | 151 | 124 |
-| Pippenger, unsigned (best c) | 459 | 348 | 281 | 242 | 206 | 182 | 161 | 144 |
+| Pippenger, signed digits (best c) | 412 | 335 | 263 | 226 | 194 | 166 | 157 | 139 |
+| Precomputed windows (Yrrid: c = 23, 2 sets) | 114,824 | 28,826 | 7,323 | 1,946 | 597 | 247 | 147 | 120 |
+| Pippenger, unsigned (best c) | 459 | 344 | 281 | 242 | 206 | 182 | 157 | 148 |
 
 Window sizes chosen for each n (best per-proof count):
 
-- Pippenger, signed digits (best c): 2^10: c=9, 2^12: c=10, 2^14: c=12, 2^16: c=14, 2^18: c=16, 2^20: c=17, 2^22: c=20, 2^24: c=21
-- Pippenger, unsigned (best c): 2^10: c=8, 2^12: c=9, 2^14: c=11, 2^16: c=13, 2^18: c=15, 2^20: c=17, 2^22: c=18, 2^24: c=20
+- Pippenger, signed digits (best c): 2^10: c=9, 2^12: c=11, 2^14: c=12, 2^16: c=14, 2^18: c=16, 2^20: c=17, 2^22: c=20, 2^24: c=21
+- Pippenger, unsigned (best c): 2^10: c=8, 2^12: c=9, 2^14: c=11, 2^16: c=13, 2^18: c=15, 2^20: c=17, 2^22: c=18, 2^24: c=21

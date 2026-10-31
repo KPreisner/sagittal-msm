@@ -9,8 +9,9 @@ Bucket occupancy uses the Poisson approximation: a bucket hit at rate lam per MS
 with probability exp(-lam).
 """
 
+import itertools
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from sagittal_msm.msm.pippenger import num_buckets, num_windows
 
@@ -86,18 +87,70 @@ def bucket_stats(segments: Sequence[tuple[int, float]]) -> tuple[float, float]:
 Segments = list[tuple[int, float]]  # (bucket count, hit rate per MSM), bottom-up
 
 
-def _window_segments(n: int, r: int, c: int, signed: bool, w: int, windows: int) -> Segments:
-    """Expected hits per MSM on the buckets (bottom-up) from window w of n scalars."""
-    buckets = num_buckets(c, signed)
-    if w < windows - 1:
-        if signed:
-            # Magnitudes 1 .. 2^(c-1)-1 come from two residues each, 2^(c-1) from one.
-            return [(buckets - 1, 2.0 * n / (1 << c)), (1, 1.0 * n / (1 << c))]
-        return [(buckets, 1.0 * n / (1 << c))]
-    # Top window: the digit (plus any carry) is roughly uniform over [0, m).
-    m = max(2, -(-r // (1 << (w * c))))
-    used = min(m - 1, buckets)
-    return [(used, 1.0 * n / m), (buckets - used, 0.0)]
+def _range(buckets: int, start: int, stop: int, lam: float) -> Segments:
+    """Rate lam on bucket indices [start, stop), 0 elsewhere."""
+    start, stop = max(0, start), min(buckets, stop)
+    if stop <= start or lam == 0:
+        return [(buckets, 0.0)]
+    parts = [(start, 0.0), (stop - start, lam), (buckets - stop, 0.0)]
+    return [(count, rate) for count, rate in parts if count]
+
+
+def _window_count(x: int, c: int, w: int, j: int) -> int:
+    """How many integers in [0, x) have window w (bits wc .. wc + c - 1) equal to j."""
+    shift = 1 << (w * c)
+    cycles, rest = divmod(x, shift << c)
+    return cycles * shift + min(max(rest - j * shift, 0), shift)
+
+
+def _window_runs(lo: int, hi: int, c: int, w: int) -> list[tuple[int, int, float]]:
+    """Exact distribution of window w's value for x uniform in [lo, hi), as runs
+    (first value, end value, probability of each value in the run)."""
+    shift, full = 1 << (w * c), 1 << c
+    cuts = {0, full}
+    for x in (lo, hi):
+        j = (x % (shift << c)) // shift
+        cuts |= {j, j + 1}
+    edges = sorted(e for e in cuts if 0 <= e <= full)
+    size = hi - lo
+    runs = []
+    for a, b in itertools.pairwise(edges):
+        prob = (_window_count(hi, c, w, a) - _window_count(lo, c, w, a)) / size
+        if prob > 0:
+            runs.append((a, b, prob))
+    return runs
+
+
+def _windows(n: int, r: int, c: int, signed: bool) -> list[tuple[Segments, float]]:
+    """For each window, bottom-up: expected hits per bucket, and expected negative digits.
+
+    Unsigned digits are the base-2^c digits u of k, uniform in [0, r). Signed digits in
+    [-(2^(c-1) - 1), 2^(c-1)], the range `pippenger.digits` produces, are exactly u - o where
+    u are the base-2^c digits of k + H, o = 2^(c-1) - 1 and H = o * sum(2^(w c)). Since k + H is
+    uniform in [H, H + r), every window's distribution is exact, carries included.
+    """
+    buckets, half = num_buckets(c, signed), 1 << (c - 1)
+    windows = num_windows(r.bit_length(), c, signed)
+    offset = half - 1 if signed else 0
+    h = offset * sum(1 << (w * c) for w in range(windows))
+    out: list[tuple[Segments, float]] = []
+    for w in range(windows):
+        segments: Segments = [(buckets, 0.0)]
+        negatives = 0.0
+        for lo, hi, prob in _window_runs(h, h + r, c, w):
+            # digit u - offset > 0 lands in bucket u - offset - 1
+            pos_lo = max(lo, offset + 1)
+            if pos_lo < hi:
+                part = _range(buckets, pos_lo - offset - 1, hi - offset - 1, n * prob)
+                segments = _add_segments(segments, part)
+            # digit u - offset < 0 has magnitude offset - u and lands in bucket offset - u - 1
+            neg_hi = min(hi, offset)
+            if lo < neg_hi:
+                negatives += n * (neg_hi - lo) * prob
+                part = _range(buckets, offset - neg_hi, offset - lo, n * prob)
+                segments = _add_segments(segments, part)
+        out.append((segments, negatives))
+    return out
 
 
 def _add_segments(a: Segments, b: Segments) -> Segments:
@@ -124,20 +177,26 @@ def _add_segments(a: Segments, b: Segments) -> Segments:
     return out
 
 
-def pippenger(n: int, r: int, c: int, signed: bool = False, sets: int | None = None) -> Counts:
-    bits = r.bit_length()
-    windows = num_windows(bits, c, signed)
-    sets = windows if sets is None else sets
-    copies = -(-windows // sets)
-    buckets = num_buckets(c, signed)
-
-    # Signed digits are negative for residues above 2^(c-1); the top window never is.
-    negations = (windows - 1) * n * ((1 << (c - 1)) - 1) / (1 << c) if signed else 0.0
-    accumulate = reduce_adds = 0.0
+def _bucket_sets(
+    n: int, r: int, c: int, signed: bool, sets: int | None
+) -> tuple[list[Segments], float, int, int]:
+    """Hit rates of each bucket set, expected negations, number of sets and of copies."""
+    windows = _windows(n, r, c, signed)
+    sets = len(windows) if sets is None else sets
+    rates: list[Segments] = []
     for s in range(sets):
-        segments: Segments = [(buckets, 0.0)]
-        for w in range(s, windows, sets):
-            segments = _add_segments(segments, _window_segments(n, r, c, signed, w, windows))
+        segments: Segments = [(num_buckets(c, signed), 0.0)]
+        for window_segments, _ in windows[s::sets]:
+            segments = _add_segments(segments, window_segments)
+        rates.append(segments)
+    negations = sum(neg for _, neg in windows)
+    return rates, negations, sets, -(-len(windows) // sets)
+
+
+def pippenger(n: int, r: int, c: int, signed: bool = False, sets: int | None = None) -> Counts:
+    rates, negations, sets, copies = _bucket_sets(n, r, c, signed, sets)
+    accumulate = reduce_adds = 0.0
+    for segments in rates:
         hits = sum(count * lam for count, lam in segments)  # nonzero digits landing here
         touched, top = bucket_stats(segments)
         accumulate += hits - touched
@@ -159,3 +218,68 @@ def best_pippenger(
 ) -> int:
     """Window size c with the fewest expected per-proof operations."""
     return min(c_range, key=lambda c: per_proof(pippenger(n, r, c, signed, sets)))
+
+
+# Bucket loads: how many points land in one bucket. On a GPU, buckets are the units of parallel
+# work, so the largest bucket bounds how long accumulation takes. Each function returns
+# (mean load over buckets, median of the maximum load), estimated without running anything.
+
+
+def _median_of_max(log_cdf: Callable[[int], float], high: int) -> int:
+    """Smallest k with P(max load <= k) >= 1/2, given log P(max <= k) for k in [0, high]."""
+    low = 0
+    while low < high:
+        mid = (low + high) // 2
+        if log_cdf(mid) >= math.log(0.5):
+            high = mid
+        else:
+            low = mid + 1
+    return low
+
+
+def _normal_log_cdf(z: float) -> float:
+    phi = 0.5 * math.erfc(-z / math.sqrt(2))
+    return math.log(phi) if phi > 0 else -math.inf
+
+
+def _poisson_log_cdf(k: int, lam: float) -> float:
+    """log P(X <= k) for X ~ Poisson(lam). Exact for small lam, normal approximation above 100."""
+    if lam == 0 or k > lam + 12 * math.sqrt(lam) + 30:
+        return 0.0
+    if lam > 100:
+        return _normal_log_cdf((k + 0.5 - lam) / math.sqrt(lam))
+    terms = [i * math.log(lam) - lam - math.lgamma(i + 1) for i in range(k + 1)]
+    top = max(terms)
+    return min(0.0, top + math.log(sum(math.exp(t - top) for t in terms)))
+
+
+def sagittal_loads(n: int, r: int, g: int) -> tuple[float, int]:
+    """Bucket i (one per scalar bit) gets one lookup per batch whose bit-i column is nonzero."""
+    bits, batches = r.bit_length(), n / g
+    hit = [1 - (1 - bit_probability(r, i)) ** g for i in range(bits)]
+    means = [batches * q for q in hit]
+    sds = [math.sqrt(batches * q * (1 - q)) or 1e-9 for q in hit]
+
+    def log_cdf(k: int) -> float:  # normal approximation to each binomial
+        total = 0.0
+        for mu, sd in zip(means, sds, strict=True):
+            total += _normal_log_cdf((k + 0.5 - mu) / sd)
+        return total
+
+    return sum(means) / bits, _median_of_max(log_cdf, math.ceil(batches))
+
+
+def pippenger_loads(
+    n: int, r: int, c: int, signed: bool = False, sets: int | None = None
+) -> tuple[float, int]:
+    """Bucket hits are Poisson with the rates used by `pippenger()`."""
+    rates, _, _, _ = _bucket_sets(n, r, c, signed, sets)
+    segments = [segment for set_rates in rates for segment in set_rates]
+    buckets = sum(count for count, _ in segments)
+    mean = sum(count * lam for count, lam in segments) / buckets
+    top = max(lam for _, lam in segments)
+
+    def log_cdf(k: int) -> float:
+        return sum(count * _poisson_log_cdf(k, lam) for count, lam in segments if lam)
+
+    return mean, _median_of_max(log_cdf, math.ceil(top * 4 + 50))
