@@ -16,3 +16,5 @@ The same material as an interactive walkthrough: [karl.preisner.us/sagittal-msm]
    precompute, and memory.
 7. [Methodology](7-methodology.md): how the counts and model are produced and tested, and what
    they don't cover.
+
+[Terms and references](glossary.md): short definitions of every term used in the docs, with sources.

@@ -67,6 +67,8 @@ addition is the cheap mixed kind.
 6. [Results](docs/6-results.md): GPU timings, operation counts, precompute, memory
 7. [Methodology](docs/7-methodology.md): how every number is produced and tested
 
+[Terms and references](docs/glossary.md): short definitions of every term used, with sources.
+
 ## Quick start
 
 You need [uv](https://docs.astral.sh/uv/). [Task](https://taskfile.dev) is optional.

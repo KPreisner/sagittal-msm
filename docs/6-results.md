@@ -44,6 +44,10 @@ the closed-form model; dots are measured runs, which match it within 2%:
 in n (b(1 − 2^−g)/g lookups per point), while Pippenger's best window grows with n and its cost
 per point falls. So the GPU result above is not "fewer operations".
 
+The **Yrrid configuration** rows model the parameters of Yrrid's winning ZPrize entry (window
+c = 23, signed digits, shifted point copies folding all windows into 2 bucket sets). They count
+that algorithm's operations; they are not Yrrid's code.
+
 ## Weighted by field cost
 
 Sagittal's operations are almost all cheap mixed adds; Pippenger's reduction is full adds.

@@ -18,11 +18,20 @@ Arithmetic then happens word by word, like long multiplication on paper:
 
 - **Multiplying** two 12-word numbers takes 12 × 12 = 144 word multiplications, with carries
   passed from each partial product to the next.
-- **Reducing** the 24-word result mod p takes about as many again. The usual method (Montgomery
-  multiplication, CIOS variant) totals 2s² + s = **300 word multiply-adds for s = 12**.
-- **Montgomery form** stores each value as a·R mod p, which lets reduction use multiplications
-  and shifts instead of division. Sindri's GPU code kept points in projective coordinates in
-  Montgomery form.
+- **Reducing** the 24-word product mod p brings it back to 12 words. Done directly, that means
+  dividing a 754-bit number by a 377-bit one and keeping the remainder: a long division, far
+  slower than the multiplication itself.
+- **[Montgomery form](https://en.wikipedia.org/wiki/Montgomery_modular_multiplication)** avoids that division. Instead of a, store a·R mod p, with R = 2³⁸⁴ (the
+  first power of 2 above every 12-word number). Multiplying two stored values gives
+  (aR)(bR) = abR²; turning that back into the stored form of ab, abR, means dividing by R once.
+  R is a power of 2, so dividing by it just drops the low words. A few extra multiplications
+  make sure that division is exact. Values are converted into Montgomery form once at the
+  start and out once at the end; everything in between stays in it. Sindri's GPU code kept
+  every field element in Montgomery form.
+- **CIOS** (Coarsely Integrated Operand Scanning, [Koç, Acar and Kaliski, 1996](https://doi.org/10.1109/40.502403)) is the most common
+  way to compute one Montgomery multiplication. It interleaves multiplying and reducing word by
+  word, so the running result never grows past 14 words. It takes 2s² + s word multiply-adds
+  for s words: **300 for s = 12**, about twice the 144 of the plain product.
 - **A curve operation multiplies that again.** A mixed add is 10 field multiplications, so about
   **3,000 word multiply-adds**, plus additions and carry handling.
 
@@ -37,8 +46,10 @@ The sizes add up in memory too. On BLS12-377:
 
 ## A GPU in brief
 
-A GPU runs thousands of threads at once in groups of 32 called **warps**. A warp executes one
-instruction at a time for all 32 threads together. If threads in a warp need to do different
+A GPU program is called a **kernel** ([CUDA programming guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)). It runs as thousands of threads, organized two ways:
+**thread blocks** of up to 1,024 threads that share fast on-chip memory and can wait for each
+other, and **warps** of 32 threads. A warp executes one instruction at a time for all 32 threads
+together. If threads in a warp need to do different
 things (an `if` that goes different ways, or loops of different length), the warp runs each path
 in turn while the other threads wait. This is called **divergence**.
 
@@ -65,7 +76,8 @@ In Pippenger's bucket method ([next page](3-pippenger.md)), the bucket a point g
 its scalar. Whatever the GPU does with that, it costs something:
 
 - **Thousands of threads may target the same bucket.** Adding into a bucket is a curve addition
-  (about 3,000 multiply-adds), not a single instruction, so the hardware's atomic add can't do
+  (about 3,000 multiply-adds), not a single instruction, so the hardware's **atomic add** (an
+  instruction that lets many threads add to the same number without losing updates) can't do
   it. Threads have to take a lock (and wait in line), or the work has to be rearranged first.
 - **Rearranging means sorting.** Fast implementations first sort points by bucket, so each bucket's
   points are processed together. That is extra full passes over memory, every proof.

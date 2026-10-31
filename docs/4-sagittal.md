@@ -37,7 +37,10 @@ MSM (every proof)
 ```
 
 Why it is correct: `Σ k_i·P_i = Σ_bits 2^i · (sum of the points whose bit i is 1)`, and bucket i
-holds exactly that sum. The final loop is Horner's rule over the b buckets.
+holds exactly that sum. The final loop is **[Horner’s rule](https://en.wikipedia.org/wiki/Horner%27s_method)** over the b buckets (b = 253 scalar
+bits): start from the top bucket and repeat result = 2·result + bucket[i] down to bit 0, the way
+a binary number is read from its most significant bit. It is the same doubling chain as
+[double-and-add](1-msm.md), with bucket i in place of P.
 
 ```mermaid
 flowchart LR
@@ -140,7 +143,8 @@ bit-sliced double-and-add with all doublings shared. That was the first version,
 ## Relation to known algorithms
 
 - One batch on its own is **Straus's method** (also called Shamir's trick): simultaneous
-  multi-exponentiation with a table of all 2^g subset products of g bases.
+  multi-exponentiation with a table of all 2^g subset products of g bases (Bellman and Straus,
+  [1964](https://doi.org/10.2307/2310929); references in [Terms and references](glossary.md)).
 - Precomputing from fixed bases is the idea behind fixed-base methods such as Lim–Lee combs.
 - Pippenger's windowing is the general frame for both.
 

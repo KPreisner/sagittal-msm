@@ -22,7 +22,9 @@ listed what the design was for. With what this repository measures:
 - **No double-and-add.** No point is ever multiplied by its scalar; the only per-proof work is
   table lookups and additions.
 - **Projective coordinates in Montgomery form** for the field arithmetic
-  ([2. Big numbers and GPUs](2-hardware.md)).
+  ([2. Big numbers and GPUs](2-hardware.md)). Precisely: the benchmarked kernel kept buckets in
+  Jacobian coordinates (a weighted projective form, using [sppark](https://github.com/supranational/sppark)'s field and point types) and
+  stored table entries as affine points, so every lookup was a mixed add.
 - **About 2^8 buckets instead of 2^20.** Sagittal holds 253 buckets, against 983,040 for a
   tuned signed-digit Pippenger at 2^20 points. That is over three orders of magnitude fewer. With
   so few buckets, combining them costs about 500 operations, so finished buckets go back to the
