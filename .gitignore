@@ -18,8 +18,8 @@ dist/
 .coverage
 htmlcov/
 
-# Generated benchmark output
-results/*.csv
+# Benchmark output (quick runs only; full results are committed)
+benchmarks/results-quick/
 *.log
 
 # OS / editor
