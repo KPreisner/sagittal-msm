@@ -30,6 +30,8 @@ target-version = "py311"
 [tool.ruff.lint]
 # E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade, SIM simplify, N naming, RUF ruff-specific
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "N", "RUF"]
+# Figure and chart captions use typographic minus and multiplication signs on purpose.
+allowed-confusables = ["−", "×"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -1,6 +1,6 @@
-# 5. Results
+# 6. Results
 
-[Docs index](README.md) · Previous: [4. Why it suits GPUs](4-gpu.md) · Next: [6. Methodology](6-methodology.md)
+[Docs index](README.md) · Previous: [5. Why it suits GPUs](5-gpu.md) · Next: [7. Methodology](7-methodology.md)
 
 ## On GPUs (2023)
 
@@ -64,7 +64,7 @@ Against the Yrrid configuration on the same A10G:
 | Measured time | 1.33× slower (64 vs 48 ms) |
 
 Field cost explains most of the gap. The rest is the structure described in
-[4. Why it suits GPUs](4-gpu.md): few equally loaded buckets, nothing left to reduce, and tables
+[5. Why it suits GPUs](5-gpu.md): few equally loaded buckets, nothing left to reduce, and tables
 in shared memory. Those let Sagittal do each field operation faster.
 
 ## One-time precompute
@@ -87,7 +87,7 @@ point per proof, when one precompute serves K proofs (2^20 points):
 ## Memory
 
 Sagittal's batch size is limited by GPU memory and shared memory
-([4. Why it suits GPUs](4-gpu.md)). The model reproduces the logged V100 batch sizes and shows
+([5. Why it suits GPUs](5-gpu.md)). The model reproduces the logged V100 batch sizes and shows
 where the trade-off turns: on a 16 GiB GPU, per-proof field multiplications per point are flat at
 280 up to 2^21 (g = 9). They rise to 489 at 2^24 (g = 5), where Pippenger needs 139.
 
@@ -97,4 +97,6 @@ where the trade-off turns: on a 16 GiB GPU, per-proof field multiplications per 
   reduction-free work lets each operation run faster than in bucket methods.
 - **Where it loses:** large MSMs, where memory forces small batches. Also raw operation counts:
   a tuned Pippenger always does fewer.
-- **Every number here can be regenerated** with `task bench-full` ([methodology](6-methodology.md)).
+- **Every number here can be regenerated** with `task bench-full` ([methodology](7-methodology.md)).
+
+[Docs index](README.md) · Previous: [5. Why it suits GPUs](5-gpu.md) · Next: [7. Methodology](7-methodology.md)

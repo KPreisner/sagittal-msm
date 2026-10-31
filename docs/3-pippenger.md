@@ -1,6 +1,6 @@
-# 2. Pippenger's bucket method
+# 3. Pippenger's bucket method
 
-[Docs index](README.md) · Previous: [1. MSM](1-msm.md) · Next: [3. Sagittal](3-sagittal.md)
+[Docs index](README.md) · Previous: [2. Big numbers and GPUs](2-hardware.md) · Next: [4. Sagittal](4-sagittal.md)
 
 Every fast MSM, including the ZPrize 2022 winners, is built on the bucket method. Sagittal is
 easiest to understand as a different way of slicing the same picture.
@@ -33,10 +33,10 @@ flowchart LR
     R --> C["combine windows<br/>c doublings each"]
 ```
 
-![Pippenger slices the bit matrix into strips c bits wide](figures/slicing.png)
+![Pippenger slices the bit matrix into strips c bits wide](figures/pippenger.png)
 
-*Left: Pippenger cuts the scalar bit matrix into strips c bits wide and n rows tall. Right:
-Sagittal, covered next, cuts it into blocks 1 bit wide and g rows tall.*
+*Each row is one scalar in binary. A window is a strip c bits wide and n rows tall (here c = 4).
+Every row's digit in the highlighted window picks one of 2^c − 1 buckets.*
 
 ## Cost and the choice of c
 
@@ -76,4 +76,4 @@ Pippenger's buckets are filled by the scalars, so on a GPU:
 - **The reduction waits for accumulation.** Bucket reduction can only start once every bucket
   is final, and at Yrrid's c = 23 it is most of the work at 2^20 points and below.
 
-Next: [3. Sagittal](3-sagittal.md), which slices the bit matrix the other way.
+[Docs index](README.md) · Previous: [2. Big numbers and GPUs](2-hardware.md) · Next: [4. Sagittal](4-sagittal.md)

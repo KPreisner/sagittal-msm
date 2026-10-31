@@ -1,11 +1,36 @@
-# 4. Why Sagittal suits GPUs
+# 5. Why Sagittal suits GPUs
 
-[Docs index](README.md) · Previous: [3. Sagittal](3-sagittal.md) · Next: [5. Results](5-results.md)
+[Docs index](README.md) · Previous: [4. Sagittal](4-sagittal.md) · Next: [6. Results](6-results.md)
 
 At 2^20 points Sagittal does more curve operations than a well-tuned Pippenger
-([results](5-results.md)). It still ran faster on GPUs in 2023, because of how its work is
+([results](6-results.md)). It still ran faster on GPUs in 2023, because of how its work is
 shaped. This page describes the CUDA design built at Sindri Labs. The CUDA code is not in this
 repository; the Python implementation here follows the same algorithm.
+
+## Design goals
+
+The 2023 write-up,
+[Sagittal MSM: a streamlined MSM implementation](https://medium.com/@sindrilabs/sagittal-msm-a-streamlined-msm-implementation-a9dcc07da585),
+listed what the design was for. With what this repository measures:
+
+- **A simple, deterministic order of bucket updates.** Each bucket belongs to one scalar bit, and
+  every bucket's work is known before any scalar is read. There are no conflicts to detect, so
+  none of the queues and schedulers that Pippenger needs on a GPU
+  ([2. Big numbers and GPUs](2-hardware.md)). One refinement: the fastest kernel, `atomic`,
+  spreads blocks across 256 copies of the buckets and locks a copy while adding into it. That
+  order is fixed by block number, not by the data.
+- **No double-and-add.** No point is ever multiplied by its scalar; the only per-proof work is
+  table lookups and additions.
+- **Projective coordinates in Montgomery form** for the field arithmetic
+  ([2. Big numbers and GPUs](2-hardware.md)).
+- **About 2^8 buckets instead of 2^20.** Sagittal holds 253 buckets, against 983,040 for a
+  tuned signed-digit Pippenger at 2^20 points. That is over three orders of magnitude fewer. With
+  so few buckets, combining them costs about 500 operations, so finished buckets go back to the
+  CPU and are combined there. On an FPGA this frees on-chip memory (block RAM), because the
+  combining logic doesn't have to live on the device.
+- **Precomputed point additions.** The subset-sum tables are built once for every proof that
+  shares a proving key. They make the stored key bigger, costing device memory or transfer
+  bandwidth, so the batch size g is a tunable parameter.
 
 ## Shape of the work
 
@@ -71,4 +96,6 @@ reproduces the batch sizes of the logged runs on a 16 GiB V100: **g = 8 at 2^22 
 
 Below 2^22, shared memory caps g at 9 and Sagittal's cost per point is flat. Above it, memory
 forces g down and the cost rises, while Pippenger's keeps falling. That is where the 2023 GPU
-results stop favoring Sagittal ([results](5-results.md)).
+results stop favoring Sagittal ([results](6-results.md)).
+
+[Docs index](README.md) · Previous: [4. Sagittal](4-sagittal.md) · Next: [6. Results](6-results.md)
