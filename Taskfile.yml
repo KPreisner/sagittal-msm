@@ -44,3 +44,9 @@ tasks:
       - uv run python benchmarks/compare.py
       - uv run python benchmarks/memory.py
       - uv run python benchmarks/structure.py
+      - uv run python benchmarks/gpu_2023.py
+
+  figures:
+    desc: Redraw the explanatory figures in docs/figures/
+    cmds:
+      - uv run python scripts/make_figures.py
