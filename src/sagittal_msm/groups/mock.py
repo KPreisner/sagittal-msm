@@ -52,6 +52,7 @@ class MockGroup:
         return (2 * a) % self._order
 
     def neg(self, a: int) -> int:
+        self.counter.record("neg")
         return -a % self._order
 
     def batch_normalize(self, points: Sequence[int]) -> list[int]:

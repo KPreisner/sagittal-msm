@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from sagittal_msm import model
+from sagittal_msm.costs import per_proof_multiplications
 from sagittal_msm.group import Group
 from sagittal_msm.groups import GROUPS, get_group
 from sagittal_msm.inputs import expected_msm, random_points, random_scalars
@@ -112,6 +113,8 @@ class Result:
     measured_per_point: float | None
     prepare_per_point: float
     storage: float
+    xyzz_mults_per_point: float
+    jacobian_mults_per_point: float
 
 
 def measure(group_name: str, log_ns: range, max_measured: int) -> list[Result]:
@@ -144,6 +147,8 @@ def measure(group_name: str, log_ns: range, max_measured: int) -> list[Result]:
                     measured_per_point=measured,
                     prepare_per_point=sum(predicted.get("prepare", {}).values()) / n,
                     storage=alg.storage(p, bits),
+                    xyzz_mults_per_point=per_proof_multiplications(predicted, "xyzz") / n,
+                    jacobian_mults_per_point=per_proof_multiplications(predicted, "jacobian") / n,
                 )
             )
             shown = f"{measured:8.2f} measured" if measured is not None else " " * 17
@@ -164,6 +169,8 @@ def write_csv(path: Path, results: list[Result]) -> None:
                 "measured_ops_per_point",
                 "prepare_ops_per_point",
                 "storage_x_n",
+                "xyzz_field_mults_per_point",
+                "jacobian_field_mults_per_point",
             ]
         )
         for x in results:
@@ -177,6 +184,8 @@ def write_csv(path: Path, results: list[Result]) -> None:
                     measured,
                     round(x.prepare_per_point, 3),
                     round(x.storage, 2),
+                    round(x.xyzz_mults_per_point, 2),
+                    round(x.jacobian_mults_per_point, 2),
                 ]
             )
 
@@ -207,6 +216,22 @@ def write_markdown(path: Path, results: list[Result], group_name: str, bits: int
             for x in rows
         ]
         lines.append(f"| {alg.label} | {rows[-1].storage:,.1f}x | " + " | ".join(cells) + " |")
+    lines += [
+        "",
+        "### Field multiplications per point (XYZZ coordinates)",
+        "",
+        "EC operations weighted by their field cost (mul + sqr, from `sagittal_msm/costs.py`): "
+        "mixed add 10, full add 14, double 9. Accumulation (Sagittal's table lookups, "
+        "Pippenger's bucket adds) uses mixed adds; bucket reduction and combining use full "
+        "adds and doubles, so field weighting favors algorithms that spend less in reduction.",
+        "",
+        "| Algorithm | " + " | ".join(f"2^{s}" for s in sizes) + " |",
+        "|---|" + "---|" * len(sizes),
+    ]
+    for alg in ALGORITHMS:
+        rows = [x for x in results if x.algorithm == alg.label]
+        cells = [f"{x.xyzz_mults_per_point:,.0f}" for x in rows]
+        lines.append(f"| {alg.label} | " + " | ".join(cells) + " |")
     lines += ["", "Window sizes chosen for each n (best per-proof count):", ""]
     for alg in ALGORITHMS:
         if "best c" in alg.label:

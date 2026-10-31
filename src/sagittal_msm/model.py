@@ -17,9 +17,15 @@ from sagittal_msm.msm.pippenger import num_buckets, num_windows
 Counts = dict[str, dict[str, float]]
 
 
+EC_OPS = ("add", "add_mixed", "double")
+
+
 def per_proof(counts: Counts) -> float:
-    """Total operations excluding the one-time `prepare` phase."""
-    return sum(sum(ops.values()) for phase, ops in counts.items() if phase != "prepare")
+    """EC additions and doublings, excluding the one-time `prepare` phase. Negations (one field
+    subtraction each) and normalization are left out."""
+    return sum(
+        ops.get(op, 0) for phase, ops in counts.items() if phase != "prepare" for op in EC_OPS
+    )
 
 
 def bit_probability(r: int, i: int) -> float:
@@ -125,6 +131,8 @@ def pippenger(n: int, r: int, c: int, signed: bool = False, sets: int | None = N
     copies = -(-windows // sets)
     buckets = num_buckets(c, signed)
 
+    # Signed digits are negative for residues above 2^(c-1); the top window never is.
+    negations = (windows - 1) * n * ((1 << (c - 1)) - 1) / (1 << c) if signed else 0.0
     accumulate = reduce_adds = 0.0
     for s in range(sets):
         segments: Segments = [(buckets, 0.0)]
@@ -140,7 +148,7 @@ def pippenger(n: int, r: int, c: int, signed: bool = False, sets: int | None = N
             "double": n * (copies - 1) * sets * c,
             "normalize": n * (copies - 1),
         },
-        "accumulate": {"add_mixed": accumulate},
+        "accumulate": {"add_mixed": accumulate, "neg": negations},
         "reduce": {"add": reduce_adds},
         "combine": {"double": (sets - 1) * c, "add": sets - 1},
     }

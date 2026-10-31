@@ -5,6 +5,7 @@ import pytest
 from sagittal_msm.groups import GROUPS, MockGroup, get_group
 from sagittal_msm.inputs import expected_msm, random_points, random_scalars
 from sagittal_msm.msm import pippenger
+from tests.helpers import group_sizes
 
 CONFIGS = [  # (c, signed, sets)
     (1, False, None),
@@ -18,9 +19,8 @@ CONFIGS = [  # (c, signed, sets)
 ]
 
 
-@pytest.mark.parametrize("name", sorted(GROUPS))
+@pytest.mark.parametrize(("name", "n"), group_sizes(sorted(GROUPS), [1, 9, 40]))
 @pytest.mark.parametrize(("c", "signed", "sets"), CONFIGS)
-@pytest.mark.parametrize("n", [1, 9, 40])
 def test_matches_reference(name: str, c: int, signed: bool, sets: int | None, n: int) -> None:
     group = get_group(name)
     points = random_points(group, n, seed=n)
@@ -111,5 +111,6 @@ def test_exact_accumulate_and_combine_counts() -> None:
     all_digits = [pippenger.digits(k, c, windows, signed) for k in scalars]
     nonzero = sum(d != 0 for ds in all_digits for d in ds)
     touched = sum(len({abs(ds[w]) for ds in all_digits if ds[w]}) for w in range(windows))
-    assert counts["accumulate"] == {"add_mixed": nonzero - touched}
+    negative = sum(d < 0 for ds in all_digits for d in ds)
+    assert counts["accumulate"] == {"add_mixed": nonzero - touched, "neg": negative}
     assert counts["combine"] == {"double": (windows - 1) * c, "add": windows - 1}
