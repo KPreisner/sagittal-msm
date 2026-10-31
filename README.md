@@ -9,6 +9,9 @@ Karl Preisner in 2022 and built for GPUs at Sindri Labs in 2023. This repository
 reference implementation that counts every operation, so you can see exactly where the work goes
 compared with Pippenger's bucket method and the ZPrize 2022 winners.
 
+▶️ **Interactive walkthrough:** [karl.preisner.us/sagittal-msm](https://karl.preisner.us/sagittal-msm/)
+steps through every idea below with animations.
+
 ## Result
 
 On BLS12-377 at 2^20 points, with the proving key precomputed once and reused across proofs,

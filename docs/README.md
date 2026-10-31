@@ -1,5 +1,7 @@
 # Sagittal MSM docs
 
+The same material as an interactive walkthrough: [karl.preisner.us/sagittal-msm](https://karl.preisner.us/sagittal-msm/).
+
 1. [MSM and elliptic-curve arithmetic](1-msm.md): a dot product of points, how points are added,
    why there is no multiply, double-and-add.
 2. [Big numbers and GPUs](2-hardware.md): 377-bit arithmetic on 32-bit hardware, GPU memory tiers,
