@@ -1,0 +1,28 @@
+# Private reference material and working notes
+old/
+tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated benchmark output
+results/*.csv
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
