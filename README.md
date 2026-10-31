@@ -1,11 +1,13 @@
 # Sagittal MSM
 
-A bit-sliced multi-scalar multiplication (MSM) algorithm for zero-knowledge provers, invented by
-Karl Preisner in 2022. This repository is a clean Python reference implementation that counts
-every operation, so you can see exactly where the work goes compared with other MSM algorithms.
+[![Lint](https://github.com/KPreisner/sagittal-msm/actions/workflows/lint.yml/badge.svg)](https://github.com/KPreisner/sagittal-msm/actions/workflows/lint.yml)
+[![Test](https://github.com/KPreisner/sagittal-msm/actions/workflows/test.yml/badge.svg)](https://github.com/KPreisner/sagittal-msm/actions/workflows/test.yml)
+[![License: PolyForm Strict](https://img.shields.io/badge/license-PolyForm%20Strict%201.0.0-blue.svg)](LICENSE)
 
-> **Status:** work in progress. The algorithm write-up is below. The operation-counting code
-> is being built now.
+Sagittal is a multi-scalar multiplication (MSM) algorithm for zero-knowledge provers, invented by
+Karl Preisner in 2022 and built for GPUs at Sindri Labs in 2023. This repository is a Python
+reference implementation that counts every operation, so you can see exactly where the work goes
+compared with Pippenger's bucket method and the ZPrize 2022 winners.
 
 ## Result
 
@@ -13,66 +15,91 @@ On BLS12-377 at 2^20 points, with the proving key precomputed once and reused ac
 Sagittal ran an MSM in 64 ms: 1.7× faster than every ZPrize 2022 GPU entry that runs on a V100,
 and faster than all entries but one (Yrrid, 48 ms) on an A10G.
 
-(CUDA implementation built at Sindri Labs in 2023. Measured against the
-[ZPrize 2022 GPU entries](https://github.com/z-prize/2022-entries/tree/main/open-division/prize1-msm/prize1a-msm-gpu)
-with the same benchmark setup: one-time setup excluded from timing for every entry.)
+![MSM time at 2^20 points on a V100 and an A10G](benchmarks/results/gpu_2023.png)
 
-## The problem
-
-Given fixed elliptic-curve points `P_1 … P_n` (a proving key that is reused for many proofs) and
-new scalars `k_1 … k_n` for each proof, compute
-
-```
-Q = k_1·P_1 + k_2·P_2 + … + k_n·P_n
-```
-
-This is the most expensive step in many ZK provers, with n around 2^20 and 253-bit scalars.
+How each entry was timed, and all sizes including where Sagittal lost:
+[Results](docs/5-results.md).
 
 ## The idea
 
-Write the scalars as rows of bits:
+Write the scalars as rows of bits. Pippenger's bucket method cuts that matrix into strips c bits
+wide and n rows tall. Sagittal cuts it into blocks **1 bit wide and g rows tall**:
+
+![Pippenger and Sagittal slicing the scalar bit matrix](docs/figures/slicing.png)
+
+A block's g bits select one subset sum of its g points. The points are the proving key, fixed
+for every proof, so all subset sums are **precomputed once**. Each proof then does one table
+lookup and one addition per (batch, bit), into **one bucket per scalar bit**, and finishes with
+about 500 operations. There is no bucket reduction and no data-dependent load, and every
+addition is the cheap mixed kind.
+
+## What the counts show
+
+- **Sagittal does more curve operations than a tuned Pippenger** at the sizes that matter: 35.8
+  per point at 2^20 (g = 7) against 15.9. Its speed comes from the shape of the work, not from
+  doing less of it.
+- **Weighted by field cost, the gap narrows.** Against the Yrrid configuration at 2^20 it does
+  1.87× more curve operations, but only 1.45× more field multiplications. It was only 1.33× slower on
+  the same GPU.
+- **Its work parallelizes cleanly.** At 2^20:
+  - 253 equally loaded buckets, against Pippenger's 983,040 data-dependent ones;
+  - 504 operations after accumulation, against 1.9 million.
+- **Memory is the limit.** Tables hold (2^g − 1)/g points per input point, so large MSMs force
+  small g. That is where the GPU results stop favoring Sagittal, and the model reproduces the
+  batch sizes the 2023 runs had to use.
+
+![Where per-proof work goes](benchmarks/results/structure.png)
+
+## Docs
+
+1. [Multi-scalar multiplication](docs/1-msm.md): the problem and what curve operations cost
+2. [Pippenger's bucket method](docs/2-pippenger.md): the standard approach and its variants
+3. [Sagittal MSM](docs/3-sagittal.md): the algorithm, a worked example, costs, prior work
+4. [Why Sagittal suits GPUs](docs/4-gpu.md): the CUDA design and the memory limit
+5. [Results](docs/5-results.md): GPU timings, operation counts, precompute, memory
+6. [Methodology](docs/6-methodology.md): how every number is produced and tested
+
+## Quick start
+
+You need [uv](https://docs.astral.sh/uv/). [Task](https://taskfile.dev) is optional.
+
+```sh
+uv sync
+uv run pytest           # or: task py-test
+task bench-full         # regenerate benchmarks/results/
+```
+
+```python
+from sagittal_msm.groups import get_group
+from sagittal_msm.inputs import expected_msm, random_points, random_scalars
+from sagittal_msm.msm import sagittal
+
+group = get_group("bls12-377-xyzz")  # or bn254-*, goldilocks-*, mock-bls12-377, ...
+points, scalars = random_points(group, 64), random_scalars(group, 64)
+
+tables = sagittal.prepare(group, points, batch_size=7)  # once per proving key
+result = sagittal.msm(group, tables, scalars)  # every proof
+assert group.eq(result, expected_msm(group, points, scalars))
+
+print(group.counter.as_dict())  # curve operations by phase
+print(group.field.counter.as_dict())  # field operations by phase
+```
+
+## Repository layout
 
 ```
-            bit:  252 ...  3  2  1  0
-  k_1 · P_1   =  [  1 ...  1  0  1  0 ]
-  k_2 · P_2   =  [  0 ...  0  1  0  1 ]
-  k_3 · P_3   =  [  1 ...  0  1  0  1 ]
-  ...
+src/sagittal_msm/
+  msm/          naive.py, sagittal.py, pippenger.py
+  groups/       counting group, Jacobian and XYZZ curves, curve constants, registry
+  field.py      prime field that counts its operations
+  model.py      closed-form expected counts, tested against measured ones
+  costs.py      field operations per curve operation
+  memory.py     GPU memory model
+benchmarks/     batch_size, compare, memory, structure, gpu_2023 (results/ is committed)
+scripts/        figures, Goldilocks curve search
+docs/           the explainers above
+tests/          correctness, exact counts, model validation
 ```
-
-**Pippenger's bucket method** cuts this matrix into vertical strips that are *c bits wide and
-n rows tall*. Points go into 2^c buckets by digit value, and each strip then needs a bucket
-reduction step.
-
-**Sagittal** cuts it the other way: into blocks that are *1 bit wide and g rows tall*. A block's
-g bits select one of the 2^g subset sums of those g points. Because the points are fixed, every
-subset sum is **precomputed once**. Each proof then only does table lookups and additions:
-
-```
-for each batch of g scalars:
-    for each bit position i:
-        pattern = the g bits at position i
-        bucket[i] += table[batch][pattern]
-
-result = bucket[252]
-for i = 251 down to 0:
-    result = 2·result + bucket[i]
-```
-
-That gives exactly one bucket per scalar bit, with no bucket reduction step, equal work per
-bucket, and one writer per bucket. That structure maps very well onto GPUs. The trade-off is
-memory: the table holds (2^g − 1)/g points per input point.
-
-Sagittal combines ideas from Straus's/Shamir's simultaneous multi-exponentiation and Pippenger's
-windowing. What it adds is the bit-major ("sagittal") slicing, offline subset-sum tables over a
-fixed proving key, and a reduction-free parallel structure.
-
-## What this repo will contain
-
-- Sagittal, Pippenger (unsigned, signed, precomputed-window) and naive MSM in readable Python
-- Exact counts of curve additions/doublings and field operations, split by phase
-- Swappable curves: BN254, BLS12-377, a small test curve, and a fast counting group
-- An analytic cost model that explains where Sagittal wins and where it stops winning
 
 ## License
 
