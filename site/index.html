@@ -68,6 +68,21 @@
     font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 920px; margin: 0 auto; padding: 32px 16px 48px; }
+  .portfolio-bar {
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--track) 40%, transparent);
+  }
+  .portfolio-bar div {
+    max-width: 920px;
+    margin: 0 auto;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .portfolio-bar a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+  .portfolio-bar a:hover, .portfolio-bar a:focus-visible { color: var(--text); }
   header h1 { margin: 0 0 4px; font-size: 30px; }
   header .lede { margin: 0 0 10px; color: var(--text-2); max-width: 70ch; }
   header nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
@@ -167,6 +182,7 @@
 </style>
 </head>
 <body>
+<nav class="portfolio-bar" aria-label="Portfolio"><div><a href="https://karl.preisner.us">← Karl Preisner · portfolio</a></div></nav>
 <main>
 <header>
   <h1>Sagittal MSM</h1>
@@ -176,7 +192,6 @@
   <nav>
     <a href="https://github.com/KPreisner/sagittal-msm">Source on GitHub</a>
     <a href="https://github.com/KPreisner/sagittal-msm/tree/main/docs">Full docs</a>
-    <a href="https://karl.preisner.us/">karl.preisner.us</a>
   </nav>
   <p class="headline">On BLS12-377 at 2<sup>20</sup> points, with the proving key precomputed
     once and reused across proofs, Sagittal ran an MSM in 64 ms: 1.7× faster than every ZPrize
