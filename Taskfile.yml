@@ -30,11 +30,13 @@ tasks:
       - uv run pytest {{.CLI_ARGS}}
 
   bench:
-    desc: Quick benchmark (n = 2^10, g 1-10) into benchmarks/results-quick/
+    desc: Quick benchmarks (small n) into benchmarks/results-quick/
     cmds:
       - uv run python benchmarks/batch_size.py --log-n 10 --max-batch 10 --out benchmarks/results-quick
+      - uv run python benchmarks/compare.py --max-measured-log-n 12 --out benchmarks/results-quick
 
   bench-full:
-    desc: Full benchmark (n = 2^12, g 1-12) into benchmarks/results/
+    desc: Full benchmarks into benchmarks/results/ (about 30 s)
     cmds:
       - uv run python benchmarks/batch_size.py
+      - uv run python benchmarks/compare.py
