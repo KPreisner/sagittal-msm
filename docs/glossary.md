@@ -8,7 +8,14 @@ such number; a field multiplication multiplies two of them mod p. Curve coordina
 elements. See [1. MSM](1-msm.md).
 
 **Scalar field r vs base field p.** Coordinates are numbers mod p (377 bits for BLS12-377). The
-points form a group with r elements (253 bits), so scalars only matter mod r.
+curve has h·r points; provers use the subgroup of prime order r (253 bits), so scalars only matter
+mod r. A prime order means every point but O generates the subgroup and the discrete logarithm
+gets the full difficulty of r ([Pohlig–Hellman](https://en.wikipedia.org/wiki/Pohlig%E2%80%93Hellman_algorithm)). See [1. MSM](1-msm.md).
+
+**Sagittal plane.** In anatomy, the vertical plane that divides a body into left and right halves
+([Wikipedia](https://en.wikipedia.org/wiki/Sagittal_plane)). Sagittal MSM is named for its
+slicing: it cuts the scalar bit matrix into columns one bit wide, where Pippenger cuts strips c
+bits wide. See [4. Sagittal](4-sagittal.md).
 
 **Identity point O, and −P.** The curve's "zero": P + O = P. The negative of P = (x, y) is
 −P = (x, −y), and P + (−P) = O.
@@ -66,7 +73,7 @@ and Straus, *American Mathematical Monthly*, 1964); the same idea appears in
 (BLS12-377, batches of 2^26 points) was led by Yrrid and MatterLabs, whose entries were later
 combined into one: [challenge](https://www.zprize.io/prizes/accelerating-msm-operations-on-gpu-fpga), [results](https://www.zprize.io/blog/announcing-zprize-results), [entries](https://github.com/z-prize/2022-entries/tree/main/open-division/prize1-msm/prize1a-msm-gpu), [Yrrid's code](https://github.com/yrrid/submission-msm-gpu).
 
-**BLS12-377, BN254, Goldilocks.** [BLS12-377](https://eprint.iacr.org/2018/962) and [BN254](https://eips.ethereum.org/EIPS/eip-197) are curves widely used in zero-knowledge
+**BLS12-377, BN254, Goldilocks.** [BLS12-377](https://eips.ethereum.org/EIPS/eip-2539) (introduced in the [Zexe paper](https://eprint.iacr.org/2018/962)) and [BN254](https://eips.ethereum.org/EIPS/eip-197) are curves widely used in zero-knowledge
 proofs (377- and 254-bit fields; 253- and 254-bit scalars). Goldilocks is the prime
 2^64 − 2^32 + 1, popular because its numbers fit in a 64-bit word (used by [Plonky2](https://github.com/0xPolygonZero/plonky2)); this project uses a small test
 curve over it.

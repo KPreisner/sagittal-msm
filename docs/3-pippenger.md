@@ -39,7 +39,7 @@ flowchart LR
 *Each row is one scalar in binary. A window is a strip c bits wide and n rows tall (here c = 4).
 Every row's digit in the highlighted window picks one of 2^c − 1 buckets.*
 
-## Cost and the choice of c
+## Cost and the choice of window size c
 
 ```
 accumulate ≈ W · n         (one mixed add per point per window)

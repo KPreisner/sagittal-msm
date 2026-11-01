@@ -4,7 +4,7 @@
 
 How every number in these docs is produced, and what it does not cover.
 
-## Counting
+## Counting operations
 
 Algorithms never count anything themselves. They call group operations (`add`, `add_mixed`,
 `double`, `neg`, `batch_normalize`) inside named phases, and the group records each call:
@@ -28,7 +28,7 @@ flowchart LR
     F --> FC["field-op counts"]
 ```
 
-## Two kinds of group
+## Two kinds of group: counting and real curves
 
 - **The counting group.** An elliptic-curve subgroup of prime order r has the same structure as
   the integers mod r under addition. Every algorithm here uses only group operations, so running

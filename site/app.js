@@ -78,6 +78,89 @@ const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const term = (j) => `P${j}`;
 
 // ---------------------------------------------------------------------------------------------
+// 1. A prime-order subgroup: y^2 = x^3 + 3 mod 37 has 39 = 3 * 13 points; G generates 13 of them
+
+function subgroup() {
+  const root = document.getElementById("subgroup");
+  const svg = root.querySelector("[data-view]");
+  const P = 37, B = 3, GEN = [2, 14], W = 640, H = 400, X = 40, Y = 16, S = 9.6;
+  const mod = (a) => ((a % P) + P) % P;
+  const inv = (a) => { let r = 1; for (let e = P - 2, b = mod(a); e; e >>= 1, b = b * b % P) if (e & 1) r = r * b % P; return r; };
+  const add = (p, q) => {
+    if (!p) return q;
+    if (!q) return p;
+    if (p[0] === q[0] && mod(p[1] + q[1]) === 0) return null;
+    const lam = p[0] === q[0] ? mod(3 * p[0] * p[0] * inv(2 * p[1])) : mod((q[1] - p[1]) * inv(q[0] - p[0]));
+    const x = mod(lam * lam - p[0] - q[0]);
+    return [x, mod(lam * (p[0] - x) - p[1])];
+  };
+  const points = [];
+  for (let x = 0; x < P; x++) for (let y = 0; y < P; y++) if (mod(y * y - x ** 3 - B) === 0) points.push([x, y]);
+  const multiples = [GEN];
+  while (multiples[multiples.length - 1]) multiples.push(add(multiples[multiples.length - 1], GEN));
+  const R = multiples.length; // the last entry is null: R·G = O
+  const px = ([x]) => X + x * S + S / 2, py = ([, y]) => Y + (P - 1 - y) * S + S / 2;
+  const hl = (x) => `<b style="color:var(--sagittal)">${x}</b>`;
+
+  function render(s) {
+    clear(svg);
+    el("rect", { x: X, y: Y, width: P * S, height: P * S, fill: "none", stroke: "var(--track)" }, svg);
+    txt(svg, X, Y + P * S + 16, "x = 0", { "font-size": 11, fill: "var(--text-2)" });
+    txt(svg, X + P * S, Y + P * S + 16, `${P - 1}`, { "font-size": 11, fill: "var(--text-2)", "text-anchor": "end" });
+    txt(svg, X - 6, Y + P * S, "y = 0", { "font-size": 11, fill: "var(--text-2)", "text-anchor": "end" });
+    txt(svg, X - 6, Y + 10, `${P - 1}`, { "font-size": 11, fill: "var(--text-2)", "text-anchor": "end" });
+    const shown = multiples.slice(0, Math.min(s, R - 1));
+    for (let k = 1; k < shown.length; k++) {
+      el("line", { x1: px(shown[k - 1]), y1: py(shown[k - 1]), x2: px(shown[k]), y2: py(shown[k]),
+                   stroke: "var(--sagittal)", "stroke-opacity": 0.35, "stroke-width": 1.5 }, svg);
+    }
+    const inSub = new Set(shown.map((q) => q.join()));
+    for (const q of points) {
+      const on = inSub.has(q.join());
+      el("circle", { cx: px(q), cy: py(q), r: on ? 5 : 3.5, fill: on ? "var(--sagittal)" : "var(--curve)",
+                     "fill-opacity": on ? 1 : 0.6 }, svg);
+    }
+    const lx = X + P * S + 24, ox = lx + 14, oy = 214;
+    if (s >= R) {
+      const last = multiples[R - 2];
+      el("line", { x1: px(last), y1: py(last), x2: ox, y2: oy, stroke: "var(--sagittal)",
+                   "stroke-width": 1.5, "stroke-dasharray": "5 4" }, svg);
+    }
+    if (s > R) {  // O + G = G closes the loop
+      el("line", { x1: ox, y1: oy, x2: px(GEN), y2: py(GEN), stroke: "var(--sagittal)",
+                   "stroke-width": 1.5, "stroke-dasharray": "5 4" }, svg);
+    }
+    el("circle", { cx: ox, cy: oy, r: 11, fill: s >= R ? "var(--sagittal)" : "var(--surface)",
+                   stroke: s >= R ? "var(--sagittal)" : "var(--curve)", "stroke-width": 2 }, svg);
+    txt(svg, ox, oy + 5, "O", { "text-anchor": "middle", "font-size": 14, "font-weight": 700,
+                               fill: s >= R ? "#ffffff" : "var(--text)" });
+    txt(svg, ox + 20, oy - 3, "O, the identity: not a dot,", { "font-size": 12, fill: "var(--text-2)" });
+    txt(svg, ox + 20, oy + 13, "it has no (x, y)", { "font-size": 12, fill: "var(--text-2)" });
+    const ring = s >= 1 && s < R ? [shown[shown.length - 1], s === 1 ? "G" : `${s}G`]
+               : s > R ? [GEN, `${R + 1}G = G`] : null;
+    if (ring) {
+      el("circle", { cx: px(ring[0]), cy: py(ring[0]), r: 9, fill: "none", stroke: "var(--sagittal)", "stroke-width": 2 }, svg);
+      txt(svg, px(ring[0]) + 11, py(ring[0]) - 8, ring[1], { "font-size": 14, "font-weight": 600 });
+    }
+    txt(svg, lx, 60, `y² = x³ + ${B}  mod ${P}`, { "font-size": 15 });
+    txt(svg, lx, 92, `${points.length} dots + O = ${points.length + 1} points`, { fill: "var(--text-2)" });
+    txt(svg, lx, 114, `= ${(points.length + 1) / R} × ${R}`, { fill: "var(--text-2)" });
+    if (s >= 1) txt(svg, lx, 150, `reached from G: ${shown.length} dots${s >= R ? " + O" : ""}`, { fill: "var(--sagittal)" });
+
+    if (s === 0) return `The curve y² = x³ + 3 with every number taken mod ${P}: no longer a curve, just ${points.length} dots, plus the identity O. ${points.length + 1} points in all, and ${points.length + 1} = 3 × ${R}.`;
+    if (s < R) return `${hl(s === 1 ? "G" : `${s}·G`)}${s === 1 ? ": start at a point G." : ` = ${s - 1}·G + G: add G once more.`} ` +
+                      `<span class="sub">Each step hops to another dot (point addition is explained just below).</span>`;
+    if (s === R) return `${hl(`${R}·G`)} = ${R - 1}·G + G = ${hl("O")}, the identity: the "zero" of point addition, so P + O = P. ` +
+                        `G, 2G, …, ${R - 1}G and O are the subgroup: ${hl(R)} points. ` +
+                        `<span class="sub">The other ${points.length - (R - 1)} dots are never reached from G.</span>`;
+    return `Keep going: ${hl(`${R + 1}·G`)} = ${R}·G + G = O + G = ${hl("G")}. The loop repeats every ${R} steps, like a clock with ${R} hours, ` +
+           `so k·G and (k + ${R})·G are the same point. ` +
+           `<span class="sub">Real curves are the same picture at full size, with a clock of about 2<sup>253</sup> hours (next).</span>`;
+  }
+  stepper(root, () => R + 2, render, { interval: 700 });
+}
+
+// ---------------------------------------------------------------------------------------------
 // 1. Elliptic-curve addition on y^2 = x^3 + 1 over the reals
 
 function ecAdd() {
@@ -485,6 +568,7 @@ function accumulate() {
 
 // ---------------------------------------------------------------------------------------------
 
+subgroup();
 ecAdd();
 doubleAndAdd();
 limbs();

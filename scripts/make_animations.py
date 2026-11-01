@@ -2,6 +2,8 @@
 # Copyright (c) 2022-2026 Karl Preisner
 """Render the README animations in docs/figures/.
 
+- subgroup.gif   a prime-order subgroup: on y^2 = x^3 + 3 mod 37, G, 2G, 3G, ... visit 13 of the
+                 39 points and return to O
 - ec_add.gif     adding two points on y^2 = x^3 + 1, one step at a time
 - tables.gif     building Sagittal's precomputed tables: every combination of each batch's points,
                  one addition per entry
@@ -17,6 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from make_figures import (
+    CURVE,
     GRID,
     RESULT,
     SAGITTAL,
@@ -325,6 +328,151 @@ def tables(path: Path) -> None:
     plt.close(fig)
 
 
+def subgroup(path: Path) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    p, b, gen = 37, 3, (2, 14)
+
+    def add(u: tuple[int, int] | None, v: tuple[int, int] | None) -> tuple[int, int] | None:
+        if u is None:
+            return v
+        if v is None:
+            return u
+        (x1, y1), (x2, y2) = u, v
+        if x1 == x2 and (y1 + y2) % p == 0:
+            return None
+        if u == v:
+            lam = 3 * x1 * x1 * pow(2 * y1, -1, p) % p
+        else:
+            lam = (y2 - y1) * pow(x2 - x1, -1, p) % p
+        x3 = (lam * lam - x1 - x2) % p
+        return x3, (lam * (x1 - x3) - y1) % p
+
+    points = [(x, y) for x in range(p) for y in range(p) if (y * y - x**3 - b) % p == 0]
+    multiples: list[tuple[int, int]] = [gen]
+    while (nxt := add(multiples[-1], gen)) is not None:
+        multiples.append(nxt)
+    order = len(multiples) + 1  # the next multiple is O
+
+    fig, ax = plt.subplots(figsize=(7.6, 5.4), dpi=90, facecolor=SURFACE)
+    o_at = (p + 4, p / 2)  # O has no coordinates: drawn beside the grid
+
+    def draw(step: int) -> None:
+        ax.clear()
+        ax.set_facecolor(SURFACE)
+        ax.set_xlim(-1, p)
+        ax.set_ylim(-1, p)
+        ax.set_aspect("equal")
+        ax.set_xticks([0, p - 1])
+        ax.set_yticks([0, p - 1])
+        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8, length=0)
+        for side in ax.spines.values():
+            side.set_color(GRID)
+        shown = multiples[: min(step, order - 1)]
+        if len(shown) > 1:
+            ax.plot(*zip(*shown, strict=True), color=SAGITTAL, alpha=0.35, linewidth=1.2)
+        reached = set(shown)
+        for pt in points:
+            on = pt in reached
+            ax.plot(
+                *pt,
+                "o",
+                markersize=6 if on else 4,
+                color=SAGITTAL if on else CURVE,
+                alpha=1 if on else 0.6,
+            )
+        if step > order:  # O + G = G closes the loop
+            ax.plot(
+                *zip(o_at, gen, strict=True),
+                color=SAGITTAL,
+                linewidth=1.2,
+                linestyle="--",
+                clip_on=False,
+            )
+        if step >= order:
+            ax.plot(
+                *zip(multiples[-1], o_at, strict=True),
+                color=SAGITTAL,
+                linewidth=1.2,
+                linestyle="--",
+                clip_on=False,
+            )
+        ax.plot(
+            *o_at,
+            "o",
+            markersize=18,
+            clip_on=False,
+            markeredgewidth=1.8,
+            color=SAGITTAL if step >= order else SURFACE,
+            markeredgecolor=SAGITTAL if step >= order else CURVE,
+        )
+        ax.text(
+            *o_at,
+            "O",
+            ha="center",
+            va="center",
+            fontsize=11,
+            fontweight="bold",
+            color=SURFACE if step >= order else TEXT_PRIMARY,
+        )
+        ax.text(
+            o_at[0],
+            o_at[1] - 3,
+            "the identity:\nnot a dot,\nno (x, y)",
+            ha="center",
+            va="top",
+            fontsize=8,
+            color=TEXT_SECONDARY,
+        )
+        ring = None
+        if 1 <= step < order:
+            ring = shown[-1], "G" if step == 1 else f"{step}G"
+        elif step > order:
+            ring = gen, f"{order + 1}G = G"
+        if ring is not None:
+            ax.plot(
+                *ring[0],
+                "o",
+                markersize=13,
+                markerfacecolor="none",
+                markeredgecolor=SAGITTAL,
+                markeredgewidth=1.8,
+            )
+            ax.text(
+                ring[0][0] + 0.9,
+                ring[0][1] + 0.9,
+                ring[1],
+                fontsize=11,
+                color=TEXT_PRIMARY,
+                fontweight="bold",
+            )
+        if step == 0:
+            total = len(points) + 1
+            caption = f"y² = x³ + 3 mod {p}: {len(points)} dots + O = {total} points = 3 × {order}"
+        elif step < order:
+            caption = "Start at G." if step == 1 else f"{step}G = {step - 1}G + G"
+        elif step == order:
+            caption = (
+                f"{order}G = O, the identity (P + O = P). G, 2G, …, {order - 1}G and O: a subgroup"
+                f"\nof {order} points. The other {len(points) - order + 1} dots are never reached."
+            )
+        else:
+            caption = (
+                f"{order + 1}G = O + G = G: the loop repeats every {order} steps,"
+                f"\nlike a clock with {order} hours, so kG = (k + {order})G"
+            )
+        ax.set_title(caption, fontsize=10, color=TEXT_PRIMARY, loc="left")
+
+    fig.subplots_adjust(left=0.07, right=0.8, bottom=0.07, top=0.86)  # room for 2 lines and O
+    frames = [0, 0, 0] + [s for s in range(1, order) for _ in range(2)]
+    frames += [order] * 6 + [order + 1] * 6
+    save(path, fig, draw, frames)
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -332,10 +480,11 @@ def main() -> None:
     )
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
+    subgroup(args.out / "subgroup.gif")
     ec_add(args.out / "ec_add.gif")
     tables(args.out / "tables.gif")
     sagittal(args.out / "sagittal.gif")
-    print(f"Wrote ec_add.gif, tables.gif and sagittal.gif to {args.out}")
+    print(f"Wrote subgroup.gif, ec_add.gif, tables.gif and sagittal.gif to {args.out}")
 
 
 if __name__ == "__main__":

@@ -44,6 +44,52 @@ The sizes add up in memory too. On BLS12-377:
 | XYZZ accumulator (X, Y, ZZ, ZZZ) | 48 | 192 |
 | 2^20 input points | | 96 MiB |
 
+### What the GPU code actually computed: Jacobian coordinates in Montgomery form
+
+Sagittal's benchmarked CUDA kernel kept its buckets in **Jacobian coordinates**. A point is
+stored as (X, Y, Z) and stands for the affine point x = X/Z², y = Y/Z³, so the denominators ride
+along in Z and nothing is divided until the very end. Table entries are stored affine (Z = 1), so
+adding one to a bucket is a **mixed add** (see [1. MSM](1-msm.md) for affine, Jacobian and XYZZ). The kernel used sppark's point type, which implements
+the same formulas as this repo's `JacobianGroup`:
+
+```
+Mixed add: (X1, Y1, Z1) + (x2, y2)               7M + 4S
+  Z1Z1 = Z1²
+  U2   = x2 · Z1Z1                               x2 scaled to the bucket's denominator
+  S2   = y2 · Z1 · Z1Z1                          y2 scaled likewise
+  H    = U2 − X1                                 the x-difference (λ's denominator)
+  HH   = H²
+  I    = 4 · HH
+  J    = H · I
+  r    = 2 · (S2 − Y1)                           the y-difference (λ's numerator)
+  V    = X1 · I
+  X3   = r² − J − 2·V
+  Y3   = r · (V − X3) − 2 · Y1 · J
+  Z3   = (Z1 + H)² − Z1Z1 − HH                   = 2·Z1·H, the new denominator
+
+Double: 2·(X1, Y1, Z1)                           2M + 5S
+  A  = X1²,  B = Y1²,  C = B²
+  D  = 2 · ((X1 + B)² − A − C)                   = 4·X1·B
+  E  = 3 · A                                     3x² from the tangent slope 3x²/(2y)
+  F  = E²
+  X3 = F − 2·D
+  Y3 = E · (D − X3) − 8·C
+  Z3 = 2 · Y1 · Z1
+```
+
+They are the affine formulas above with every division replaced by multiplying the other side
+through by Z. M is a field multiplication and S a squaring. In the
+[Explicit-Formulas Database](https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html), the
+standard catalog of these formulas, they are listed as `madd-2007-bl` (mixed addition, Bernstein
+and Lange, 2007) and `dbl-2009-l` (doubling, Lange, 2009); sppark's source cites the same IDs.
+
+**Every value in those formulas is in Montgomery form**, a·R mod p
+(above). That changes nothing in the formulas:
+- every product or square is one Montgomery multiplication (about 300 word multiply-adds);
+- additions, subtractions and small multiples (2·, 3·, 4·, 8·) are ordinary modular additions;
+- values enter Montgomery form once when the points are loaded, and leave it once when the
+  final result is converted back to an affine point.
+
 ## A GPU in brief
 
 A GPU program is called a **kernel** ([CUDA programming guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)). It runs as thousands of threads, organized two ways:
