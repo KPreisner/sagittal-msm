@@ -108,6 +108,7 @@
     font-size: 14px;
     line-height: 1.5;
   }
+  li pre { margin: 6px 0 12px; }
   .toc {
     margin-top: 20px;
     padding: 14px 18px;
@@ -219,7 +220,7 @@
       <li><a href="#sagittal">Sagittal MSM</a></li>
       <li><a href="#gpu">Why Sagittal suits GPUs</a></li>
       <li><a href="#results">Results</a></li>
-      <li><a href="#methodology">How the numbers are made</a></li>
+      <li><a href="#methodology">Methodology</a></li>
       <li><a href="#terms">Terms and references</a></li>
     </ol>
   </nav>
@@ -278,17 +279,28 @@
     <label><input type="checkbox" data-double> Double P (Q = P: use the tangent)</label>
   </div>
 </div>
-<pre>λ  = (y₂ − y₁) / (x₂ − x₁)      for doubling: λ = 3x₁² / (2y₁)
-x₃ = λ² − x₁ − x₂
-y₃ = λ(x₁ − x₃) − y₁</pre>
-<p>Modulo p, dividing means multiplying by an inverse, which costs hundreds of multiplications.
-  So implementations carry a running denominator in extra coordinates and divide once at the
-  end. A point stored as plain (x, y) is <strong>affine</strong>. <strong>Jacobian</strong>
-  coordinates store (X, Y, Z) with x = X/Z² and y = Y/Z³; <strong>XYZZ</strong> coordinates store
-  (X, Y, ZZ, ZZZ) with x = X/ZZ and y = Y/ZZZ, the form the fastest GPU MSMs use. One addition
-  then costs about 10–16 <a href="#t-field">field multiplications</a>: <strong>10</strong> for a
-  mixed add (a running sum + a stored affine point), <strong>14</strong> for a full add (two
-  running sums) and <strong>9</strong> for a doubling, in XYZZ.</p>
+<p>The picture turns into three steps. Write P = (x₁, y₁), Q = (x₂, y₂) and the answer
+  P + Q = (x₃, y₃).</p>
+<ol>
+  <li><strong>The slope of the line, λ</strong> (the Greek letter lambda). The slope is how far
+    the line rises for each step to the right: the change in y divided by the change in x.
+    <pre>λ = (y₂ − y₁) / (x₂ − x₁)</pre></li>
+  <li><strong>Where the line meets the curve again.</strong> Putting the line's equation into
+    y² = x³ + b gives an equation in x whose three solutions are x₁, x₂ and the new point's x.
+    Those three always add up to λ², so the new x is whatever is left over. Its y comes from
+    starting at P and following the line over to that x:
+    <pre>x = λ² − x₁ − x₂
+y = y₁ + λ(x − x₁)</pre></li>
+  <li><strong>Reflect it across the x-axis.</strong> P + Q is that point flipped: same x,
+    opposite y.
+    <pre>x₃ = x = λ² − x₁ − x₂
+y₃ = −y = λ(x₁ − x₃) − y₁</pre></li>
+</ol>
+<p><strong>Doubling</strong> (P + P) has no second point to draw a line through, and the slope
+  formula would divide by zero. So it uses the tangent line at P, the line that just touches the
+  curve there. Its slope comes from the curve's equation: λ = 3x₁² / (2y₁). Steps 2 and 3 are
+  the same, with x₂ = x₁. Every step above is adding, subtracting, multiplying or dividing,
+  so it carries over unchanged when the numbers are taken modulo p.</p>
 
 <h3>There is no multiply for elliptic-curve points</h3>
 <p>A curve has <strong>only addition</strong>. "k·P" means adding P to itself k times. There is
@@ -331,8 +343,15 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   <p class="caption" data-caption aria-live="polite"></p>
   <div class="controls" data-controls></div>
 </div>
-<p>r is prime on purpose: then every point in the loop except O leads around the whole loop, and
-  an attacker can't split the problem into smaller pieces.</p>
+<h3>Why r is prime</h3>
+<p>An attacker sees G and k·G and wants k. Suppose r were 12 instead.
+  Multiplying k·G by 4 gives k·(4G), and 4G gets back to O after only 3 steps, so k·(4G) is one
+  of just 3 points: 0·4G, 1·4G or 2·4G. Checking which one reveals k mod 3. Multiplying by 3
+  instead reveals k mod 4, in 4 tries. Only one number from 0 to 11 has both remainders
+  (remainder 2 mod 3 and 1 mod 4 means 5), so the attacker has k mod 12 after 7 tries instead
+  of 12. At real sizes the saving is enormous: an r that factored into small primes would
+  fall to a few small searches (<a href="https://en.wikipedia.org/wiki/Pohlig%E2%80%93Hellman_algorithm">Pohlig–Hellman</a>). A prime r has no factors to split on, so the attacker
+  faces the whole loop.</p>
 
 <h3>A real curve: BLS12-377</h3>
 <p>Everything on this page uses <a href="https://eips.ethereum.org/EIPS/eip-2539">BLS12-377</a> (introduced in the
@@ -364,17 +383,66 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   <p class="caption" data-caption aria-live="polite"></p>
   <div class="controls" data-controls></div>
 </div>
-<p>The product then has to be reduced mod p back to 12 words. Done directly, that is a long
-  division, slower than the multiplication itself. <strong><a href="https://en.wikipedia.org/wiki/Montgomery_modular_multiplication">Montgomery form</a></strong> avoids it:
-  store each value a as a·R mod p, with R = 2<sup>384</sup>. Multiplying two stored values gives
-  abR², and getting back to abR means dividing by R, which for a power of 2 just drops the low
-  words. Values are converted in once at the start and out once at the end. Sindri's GPU code
-  kept everything in Montgomery form.</p>
-<p>The standard way to compute one Montgomery multiplication, <strong>CIOS</strong> (Coarsely
-  Integrated Operand Scanning; <a href="https://doi.org/10.1109/40.502403">Koç, Acar and Kaliski,
-  1996</a>), interleaves multiplying and reducing word by word. It takes
-  2s² + s word multiply-adds for s words: <strong>300 per field multiplication</strong>, and about
-  <strong>3,000 per curve addition</strong>.</p>
+<h3>Division is the expensive part</h3>
+<p>Adding and multiplying big numbers both work word by word, and the words can be worked on
+  side by side. Division can't. Long division finds the answer one word at a time: guess the
+  next word of the quotient, multiply the whole divisor by the guess, subtract, fix the guess if
+  it was off, and only then move on to the next word. Every step waits on the one before, and
+  even dividing two single words is slow (a GPU has no integer divide instruction at all; the
+  compiler builds one out of other instructions).</p>
+<p>Curve arithmetic would need to divide in two places, at two different levels, and
+  implementations avoid each with a separate trick:</p>
+<ul>
+  <li><strong>Inside every field multiplication.</strong> Multiplying two 12-word numbers gives
+    24 words, which have to be reduced mod p back to 12. The remainder mod p is what's left
+    after a long division by p. <strong>Montgomery form</strong> changes how each
+    <em>single coordinate</em> (an x or a y on its own) is stored, so reducing
+    becomes chopping off the low words instead of a long division by p.</li>
+  <li><strong>Inside every point addition.</strong> The slope λ from section 1 is a fraction.
+    <strong>Jacobian and XYZZ coordinates</strong> change how each <em>point</em> (the (x, y) pair)
+    is stored, so an addition never divides.</li>
+</ul>
+<p>The two tricks stack: a point in Jacobian coordinates is three numbers, and each of those
+  numbers is stored in Montgomery form.</p>
+
+<h3>Reducing without dividing: Montgomery form</h3>
+<p>Dividing by a power of 2 is easy for a computer: chop off the low words, the way dividing by
+  1,000 chops off three decimal digits. <strong><a href="https://en.wikipedia.org/wiki/Montgomery_modular_multiplication">Montgomery form</a></strong>
+  stores each number a as a·R mod p, with R = 2<sup>384</sup> (exactly 12 words), which turns
+  the reduction after each multiplication into a division by R instead of by p. Sindri's GPU
+  code kept every number in this form. The standard way to compute one Montgomery
+  multiplication, <strong>CIOS</strong> (<a href="https://doi.org/10.1109/40.502403">Koç, Acar
+  and Kaliski, 1996</a>), takes 2s² + s word multiply-adds for s words:
+  <strong>300 per field multiplication</strong>.</p>
+
+<h3>Adding points without dividing: Jacobian and XYZZ coordinates</h3>
+<p>Modulo p, dividing by a number means multiplying by its inverse, and finding an inverse costs
+  hundreds of field multiplications. The fix is the one you use for fractions on paper:
+  1/3 + 1/5 = 8/15 needs no division if you keep the top and bottom apart. So each point
+  carries a denominator along with it, as an extra number called <strong>Z</strong>. An input
+  point (x, y) starts with Z = 1. Each addition multiplies the slope's denominator into Z
+  instead of dividing by it, and the MSM divides by Z just once, at the very end.</p>
+<p>Because the formulas square the slope for x and cube it for y, x's denominator ends up as
+  Z² and y's as Z³. <strong>Jacobian</strong> coordinates store (X, Y, Z) and mean x = X/Z²,
+  y = Y/Z³. <strong>XYZZ</strong> coordinates store Z² and Z³ themselves, as (X, Y, ZZ, ZZZ),
+  which takes more memory but saves recomputing them; the fastest GPU MSMs use it. A point
+  with no denominator, plain (x, y), is called <strong>affine</strong>.</p>
+<p>An MSM adds points into running sums, called <strong>accumulators</strong>, and those carry
+  a denominator. The input points, and Sagittal's precomputed tables, are stored affine. Adding
+  an affine point to an accumulator is a <strong>mixed add</strong>, and it is the cheapest
+  addition, because Z = 1 makes several multiplications disappear. Each operation costs about
+  10–16 <a href="#t-field">field multiplications</a> (counting squarings), and no inverses:</p>
+<div class="scroll">
+<table>
+  <tr><th>Operation</th><th>What it adds</th><th>XYZZ</th><th>Jacobian</th></tr>
+  <tr><td>Mixed add</td><td>an accumulator + a stored affine point</td><td>10</td><td>11</td></tr>
+  <tr><td>Full add</td><td>two accumulators</td><td>14</td><td>16</td></tr>
+  <tr><td>Double</td><td>an accumulator + itself</td><td>9</td><td>7</td></tr>
+</table>
+</div>
+<p>At 300 word multiply-adds per field multiplication, one mixed add is about
+  <strong>3,000</strong>. The <a href="https://github.com/KPreisner/sagittal-msm/blob/main/docs/2-hardware.md#division-is-the-expensive-part">docs</a>
+  walk through both tricks step by step, with worked examples.</p>
 
 <h3>The exact formulas the GPU kernel ran</h3>
 <p>Sagittal's GPU <a href="#t-gpu">kernel</a> kept its running sums (the
@@ -583,7 +651,7 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
 
 <!-- 7 ------------------------------------------------------------------------------------ -->
 <section>
-<h2 id="methodology">7. How the numbers are made</h2>
+<h2 id="methodology">7. Methodology</h2>
 <p>The <a href="https://github.com/KPreisner/sagittal-msm">repository</a> is a Python reference
   implementation that counts every operation. Algorithms only call group operations inside named
   phases, and the group counts them, so the counts always describe the code that ran. They run

@@ -44,42 +44,41 @@ x-axis, and the result is P + Q.
 
 ![Adding two points on an elliptic curve, step by step](figures/ec_add.gif)
 
-In coordinates, with λ the slope of the line:
+The picture turns into three steps. Write P = (x₁, y₁), Q = (x₂, y₂) and the answer
+P + Q = (x₃, y₃).
 
-```
-λ  = (y₂ − y₁) / (x₂ − x₁)
-x₃ = λ² − x₁ − x₂
-y₃ = λ(x₁ − x₃) − y₁
-```
+1. **The slope of the line, λ** (the Greek letter lambda). The slope is how far the line rises
+   for each step to the right: the change in y divided by the change in x.
+   ```
+   λ = (y₂ − y₁) / (x₂ − x₁)
+   ```
+2. **Where the line meets the curve again.** Putting the line's equation into y² = x³ + b gives
+   an equation in x whose three solutions are x₁, x₂ and the new point's x. Those three always
+   add up to λ², so the new x is whatever is left over. Its y comes from starting at P and
+   following the line over to that x:
+   ```
+   x = λ² − x₁ − x₂
+   y = y₁ + λ(x − x₁)
+   ```
+3. **Reflect it across the x-axis.** P + Q is that point flipped: same x, opposite y.
+   ```
+   x₃ = x = λ² − x₁ − x₂
+   y₃ = −y = λ(x₁ − x₃) − y₁
+   ```
 
-Adding a point to itself (doubling) uses the tangent line instead, with slope λ = 3x₁² / (2y₁).
+**Doubling** (P + P) has no second point to draw a line through, and the slope formula would
+divide by zero. So it uses the tangent line at P, the line that just touches the curve there.
+Its slope comes from the curve's equation: λ = 3x₁² / (2y₁). Steps 2 and 3 are the same, with
+x₂ = x₁.
 
 ![Adding and doubling points](figures/ec_add.png)
 
-Cryptography uses the same formulas with every number taken modulo a large prime p. There the
-picture becomes a scatter of points (below), but the algebra is identical. There is
-also an identity point O (the "point at infinity"): P + O = P, and P + (−P) = O, where −P = (x, −y).
-
-**Division is the expensive part.** Modulo p, dividing means multiplying by an inverse, and an
-inverse costs hundreds of multiplications. So implementations keep a running denominator in
-extra coordinates and divide only once at the very end:
-
-- **Affine:** plain (x, y).
-- **Jacobian:** (X, Y, Z), standing for x = X/Z², y = Y/Z³.
-- **XYZZ:** (X, Y, ZZ, ZZZ), standing for x = X/ZZ, y = Y/ZZZ.
-
-That turns one addition into about 10–16 field multiplications:
-
-| Operation | What it is | Field multiplications (XYZZ) | (Jacobian) |
-|---|---|---|---|
-| Mixed add | accumulator + a stored, normalized point | 10 | 11 |
-| Full add | accumulator + accumulator | 14 | 16 |
-| Double | 2 × accumulator | 9 | 7 |
-
-Counts are multiplications plus squarings from the
-[Explicit-Formulas Database](https://hyperelliptic.org/EFD/g1p/auto-shortw.html) formulas this
-repo implements, and the tests check every one against measured field operations. XYZZ is what the
-fastest GPU MSMs use.
+Every step above is adding, subtracting, multiplying or dividing, so cryptography uses the same
+formulas with every number taken modulo a large prime p. There the picture becomes a scatter of
+points (below), but the algebra is identical. There is also an identity point O (the "point at
+infinity"): P + O = P, and P + (−P) = O, where −P = (x, −y). Division modulo p turns out to be
+expensive, and [2. Hardware](2-hardware.md#division-is-the-expensive-part) covers how
+implementations avoid it.
 
 ```mermaid
 flowchart LR
@@ -134,8 +133,16 @@ on y² = x³ + 3 with p = 37, which has 39 = 3 × 13 points:
 
 ![On y² = x³ + 3 mod 37, G, 2G, 3G, … visit 12 of the 38 dots and then O: a subgroup of 13 points](figures/subgroup.gif)
 
-r is prime on purpose: then every point in the loop except O leads around the whole loop, and an
-attacker can't split the problem into smaller pieces.
+## Why r is prime
+
+An attacker sees G and k·G and wants k. Suppose r were 12 instead.
+Multiplying k·G by 4 gives k·(4G), and 4G gets back to O after only 3 steps, so k·(4G) is one
+of just 3 points: 0·4G, 1·4G or 2·4G. Checking which one reveals k mod 3. Multiplying by 3
+instead reveals k mod 4, in 4 tries. Only one number from 0 to 11 has both remainders
+(remainder 2 mod 3 and 1 mod 4 means 5), so the attacker has k mod 12 after 7 tries instead
+of 12. At real sizes the saving is enormous: an r that factored into small primes would
+fall to a few small searches ([Pohlig–Hellman](https://en.wikipedia.org/wiki/Pohlig%E2%80%93Hellman_algorithm)). A prime r has no factors to split on, so the attacker
+faces the whole loop.
 
 ## A real curve: BLS12-377
 
