@@ -194,7 +194,8 @@
 <main>
 <header>
   <h1>Sagittal MSM</h1>
-  <p class="lede">A faster approach to multi-scalar multiplication (MSM) of elliptic-curve points,
+  <p class="lede"><a href="#t-sagittal">Sagittal</a> MSM, a faster approach to multi-scalar
+    multiplication (MSM) of elliptic-curve points,
     one of the most expensive steps in zero-knowledge proving. This page explains it from the ground
     up, with step-by-step animations.</p>
   <p class="lede">I invented the mathematical approach in 2022, built Python operation models and a
@@ -255,25 +256,21 @@
     <div class="dot-note">Each k·P means P + P + … + P, k times</div>
   </div>
 </div>
-<p>The scalars k<sub>i</sub> are ordinary integers, about 253 bits long. The points
-  P<sub>i</sub> are pairs (x, y) of 377-bit numbers. In a zero-knowledge prover the
+<p>The scalars k<sub>i</sub> are ordinary integers. The points P<sub>i</sub> are pairs (x, y)
+  of numbers that satisfy a curve equation. In a zero-knowledge prover the
   <strong>points are fixed</strong> (they come from the proving key and are the same for every
   proof of a circuit) and the <strong>scalars change every proof</strong>. Anything computed
   from the points alone can be computed once and reused.</p>
-<p><strong>Why 253 bits and 377 bits?</strong> There are two different primes. Coordinates are
-  numbers modulo p, a 377-bit prime: the <a href="#t-field">field</a>. The points themselves form
-  a group with r elements, where r is a 253-bit prime, so adding any point to itself r times gives
-  the identity point O (defined below) and only k mod r matters. Scalars are numbers modulo r; coordinates are numbers
-  modulo p.</p>
 
-<h3>Adding two points</h3>
-<p>The curves here have the equation y² = x³ + b (b = 1 for <a href="https://eprint.iacr.org/2018/962">BLS12-377</a>). Over the real numbers,
+<h3>Adding two elliptic-curve points</h3>
+<p>The curves here have the equation y² = x³ + b for a constant b. Over the real numbers,
   adding two points has a picture: draw the line through P and Q, find where it meets the curve
-  again, and reflect across the x-axis. Real curves use the same formulas with every number
-  taken modulo a 377-bit prime. There is also an identity point O (the "point at infinity"):
-  P + O = P, and P + (−P) = O, where −P = (x, −y).</p>
+  again, and reflect across the x-axis. Cryptography uses the same formulas with every number
+  taken modulo a large prime p (shown below). There is also an identity point O (the "point at
+  infinity"): P + O = P, and P + (−P) = O, where −P = (x, −y).</p>
 <div class="card" id="ecadd">
-  <svg data-view viewBox="0 0 640 400" role="img" aria-label="Elliptic curve point addition"></svg>
+  <svg data-view viewBox="0 0 640 400" role="img" aria-label="Elliptic curve point addition"
+       style="max-width:480px;margin:0 auto"></svg>
   <p class="caption" data-caption aria-live="polite"></p>
   <div class="controls" data-controls></div>
   <div class="options">
@@ -292,42 +289,25 @@ y₃ = λ(x₁ − x₃) − y₁</pre>
   then costs about 10–16 <a href="#t-field">field multiplications</a>: <strong>10</strong> for a
   mixed add (a running sum + a stored affine point), <strong>14</strong> for a full add (two
   running sums) and <strong>9</strong> for a doubling, in XYZZ.</p>
-<p>Sagittal's GPU <a href="#t-gpu">kernel</a> kept its running sums (the
-  <a href="#t-bucket">buckets</a> of sections 3 and 4) in Jacobian coordinates and its precomputed
-  table entries affine, so each lookup is a mixed add.
-  These are the exact formulas it ran, with every value in Montgomery form (see
-  <a href="#hardware">section 2</a>): each product or square is one Montgomery multiplication, and
-  additions and small multiples are ordinary modular additions.</p>
-<div class="scroll"><pre>Mixed add: (X1, Y1, Z1) + (x2, y2)        7 multiplications + 4 squarings
-  Z1Z1 = Z1²
-  U2   = x2 · Z1Z1                        x2 scaled to the bucket's denominator
-  S2   = y2 · Z1 · Z1Z1                   y2 scaled likewise
-  H    = U2 − X1                          x-difference (λ's denominator)
-  HH   = H²,   I = 4·HH,   J = H · I
-  r    = 2 · (S2 − Y1)                    y-difference (λ's numerator)
-  V    = X1 · I
-  X3   = r² − J − 2·V
-  Y3   = r · (V − X3) − 2 · Y1 · J
-  Z3   = (Z1 + H)² − Z1Z1 − HH            = 2·Z1·H, the new denominator
 
-Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
-  A = X1²,   B = Y1²,   C = B²
-  D = 2 · ((X1 + B)² − A − C)             = 4·X1·B
-  E = 3 · A,   F = E²                     3x² from the tangent slope 3x²/(2y)
-  X3 = F − 2·D
-  Y3 = E · (D − X3) − 8·C
-  Z3 = 2 · Y1 · Z1</pre></div>
-<p class="caption sub" style="min-height:0">From the
-  <a href="https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html">Explicit-Formulas
-  Database</a>, where they are <code>madd-2007-bl</code> (mixed addition, Bernstein and Lange,
-  2007) and <code>dbl-2009-l</code> (doubling, Lange, 2009).</p>
-
-<h3>There is no multiply</h3>
+<h3>There is no multiply for elliptic-curve points</h3>
 <p>A curve has <strong>only addition</strong>. "k·P" means adding P to itself k times. There is
   no way to multiply a point by a number directly, or to multiply two points, and recovering k
   from k·P (the <a href="https://en.wikipedia.org/wiki/Discrete_logarithm">discrete logarithm</a>) is believed infeasible. That is what makes these curves
-  useful for cryptography. Instead, <strong><a href="https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication">double-and-add</a></strong> reads k's bits from the top:
-  double at every bit, add P at every 1.</p>
+  useful for cryptography.</p>
+
+<h3>A more efficient way to add</h3>
+<p>In binary, each digit is worth twice the digit to its right: 1, 2, 4, 8, … So 13 is
+  <span class="mono">1101</span> in binary: 8 + 4 + 0 + 1. Reading a binary number from the left,
+  each new digit doubles everything read so far, then adds itself:
+  <span class="mono">1</span> = 1, <span class="mono">11</span> = 2·1 + 1 = 3,
+  <span class="mono">110</span> = 2·3 = 6, <span class="mono">1101</span> = 2·6 + 1 = 13.</p>
+<p>Without a multiply, 13·P means adding P to itself 12 times: P + P + … + P.
+  <strong><a href="https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication">Double-and-add</a></strong> follows the binary digits instead: start with
+  P, then for each remaining digit double what you have (P + P is one addition) and add P if the
+  digit is 1. That reaches 13·P in <strong>5 additions instead of 12</strong>: 3 doublings and 2
+  additions of P. The gap grows fast: for a 20-bit k, about 30 additions instead of up to a
+  million. Step through it, or try your own k:</p>
 <div class="card" id="dbladd">
   <div class="options" style="margin-top:0">
     <label>k = <input type="number" data-k min="1" max="1000000000" value="13"></label>
@@ -336,9 +316,39 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
   <p class="caption" data-caption aria-live="polite"></p>
   <div class="controls" data-controls></div>
 </div>
-<p>A 253-bit scalar takes about 252 doublings and 126 additions: <strong>376 curve operations
-  per point</strong>, measured. A naive MSM does that for every point, about 400 million curve
-  operations at 2<sup>20</sup> points.</p>
+
+<h3>Curves modulo a prime: finite fields and subgroups</h3>
+<p>Cryptography doesn't use real numbers. It takes every number modulo a prime p, so the
+  coordinates are whole numbers from 0 to p − 1: a <a href="#t-field">finite field</a>. The
+  addition formulas above still work, but the smooth curve turns into a scatter of about p dots.
+  O isn't one of the dots; it's one extra point with no coordinates.</p>
+<p>Provers don't use every dot. They start at one point G and keep adding G: G, 2G, 3G, … until
+  the sequence reaches O. That loop is a <strong>subgroup</strong>, and its size is called r.
+  After O the loop repeats, (r + 1)·G = G, like a clock with r hours, so a scalar k only matters
+  mod r. Here it is on y² = x³ + 3 with p = 37, small enough to see:</p>
+<div class="card" id="subgroup">
+  <svg data-view viewBox="0 0 640 400" role="img" aria-label="A prime-order subgroup on a small curve"></svg>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
+<p>r is prime on purpose: then every point in the loop except O leads around the whole loop, and
+  an attacker can't split the problem into smaller pieces.</p>
+
+<h3>A real curve: BLS12-377</h3>
+<p>Everything on this page uses <a href="https://eips.ethereum.org/EIPS/eip-2539">BLS12-377</a> (introduced in the
+  <a href="https://eprint.iacr.org/2018/962">Zexe paper</a>), the curve of the ZPrize MSM competition. Its equation is
+  y² = x³ + 1, and its two primes are far too big to draw:</p>
+<ul>
+  <li><strong>p, 377 bits.</strong> Coordinates are numbers modulo p. In full, p is the 114-digit
+    number <span class="mono" style="word-break:break-all">258664426012969094010652733694893533536393512754914660539884262666720468348340822774968888139573360124440321458177</span>.</li>
+  <li><strong>r, 253 bits.</strong> The subgroup provers use has r points, and scalars are numbers
+    modulo r. In full, r is the 76-digit number
+    <span class="mono" style="word-break:break-all">8444461749428370424248824938781546531375899335154063827935233455917409239041</span>.</li>
+</ul>
+<p>So a scalar has 253 bits, and double-and-add takes about 252 doublings and 126 additions:
+  <strong>376 curve operations per point</strong>, measured. A naive MSM does that for every
+  point, about 400 million curve operations at 2<sup>20</sup> points. Where these sizes come
+  from: <a href="#t-primes">Terms</a>.</p>
 </section>
 
 <!-- 2 ------------------------------------------------------------------------------------ -->
@@ -366,6 +376,36 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
   2s² + s word multiply-adds for s words: <strong>300 per field multiplication</strong>, and about
   <strong>3,000 per curve addition</strong>.</p>
 
+<h3>The exact formulas the GPU kernel ran</h3>
+<p>Sagittal's GPU <a href="#t-gpu">kernel</a> kept its running sums (the
+  <a href="#t-bucket">buckets</a> of sections 3 and 4) in Jacobian coordinates and its precomputed
+  table entries affine, so each lookup is a mixed add.
+  These are the exact formulas it ran, with every value in Montgomery form (above): each product or square is one Montgomery multiplication, and
+  additions and small multiples are ordinary modular additions.</p>
+<div class="scroll"><pre>Mixed add: (X1, Y1, Z1) + (x2, y2)        7 multiplications + 4 squarings
+  Z1Z1 = Z1²
+  U2   = x2 · Z1Z1                        x2 scaled to the bucket's denominator
+  S2   = y2 · Z1 · Z1Z1                   y2 scaled likewise
+  H    = U2 − X1                          x-difference (λ's denominator)
+  HH   = H²,   I = 4·HH,   J = H · I
+  r    = 2 · (S2 − Y1)                    y-difference (λ's numerator)
+  V    = X1 · I
+  X3   = r² − J − 2·V
+  Y3   = r · (V − X3) − 2 · Y1 · J
+  Z3   = (Z1 + H)² − Z1Z1 − HH            = 2·Z1·H, the new denominator
+
+Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
+  A = X1²,   B = Y1²,   C = B²
+  D = 2 · ((X1 + B)² − A − C)             = 4·X1·B
+  E = 3 · A,   F = E²                     3x² from the tangent slope 3x²/(2y)
+  X3 = F − 2·D
+  Y3 = E · (D − X3) − 8·C
+  Z3 = 2 · Y1 · Z1</pre></div>
+<p class="caption sub" style="min-height:0">From the
+  <a href="https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html">Explicit-Formulas
+  Database</a>, where they are <code>madd-2007-bl</code> (mixed addition, Bernstein and Lange,
+  2007) and <code>dbl-2009-l</code> (doubling, Lange, 2009).</p>
+
 <h3>GPU memory and threads</h3>
 <p>A GPU program is called a <strong>kernel</strong> (<a href="https://docs.nvidia.com/cuda/cuda-c-programming-guide/">CUDA guide</a>). It runs as thousands of threads, organized
   two ways: <strong>blocks</strong> of up to 1,024 threads that share a block of fast on-chip
@@ -383,7 +423,7 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
     buckets.</span></div>
 </div>
 
-<h3>Why data-dependent work is costly</h3>
+<h3>Why data-dependent work is costly on a GPU</h3>
 <p>In Pippenger's bucket method the bucket a point goes to depends on its scalar, so many threads
   can target the same bucket at once. A bucket update is a curve addition (about 3,000
   multiply-adds), not one instruction, so the GPU's <strong>atomic add</strong> (a hardware
@@ -423,8 +463,9 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
 <!-- 4 ------------------------------------------------------------------------------------ -->
 <section>
 <h2 id="sagittal">4. Sagittal MSM</h2>
-<p>Pippenger cuts the scalar bit matrix into strips c bits wide and n rows tall. Sagittal cuts it
-  into blocks <strong>1 bit wide and g rows tall</strong>. A block's g bits select one
+<p>The <a href="#t-sagittal">sagittal plane</a> divides a body into left and right. Sagittal MSM
+  divides the scalar bit matrix the other way from Pippenger. Pippenger cuts it into strips c bits
+  wide and n rows tall; Sagittal cuts it into blocks <strong>1 bit wide and g rows tall</strong>. A block's g bits select one
   <em>subset sum</em> of its batch's points. That sum depends only on the points, so every subset
   sum is <strong>precomputed once per proving key</strong>.</p>
 <figure>
@@ -441,7 +482,7 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
   <div class="controls" data-controls></div>
 </div>
 
-<h3>Step 2, every proof: look up and add</h3>
+<h3>Step 2, every proof: look up table entries and add them into buckets</h3>
 <p>For each batch and each bit, the g scalar bits form a pattern that picks one table entry, added
   to the bucket for that bit. There is one bucket per scalar bit. The bit patterns match the
   table above: <span class="mono">0101</span> is P2 + P4 in both.</p>
@@ -564,6 +605,15 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
   <dd>The numbers 0 to p − 1, where adding, subtracting, multiplying and dividing all wrap around
     modulo the prime p. A field element is one such number; a field multiplication multiplies two
     of them mod p. Curve coordinates are field elements.</dd>
+  <dt id="t-primes">p and r: why 377 and 253 bits</dt>
+  <dd>On BLS12-377 the curve has h·r points, about p of them
+    (<a href="https://en.wikipedia.org/wiki/Hasse%27s_theorem_on_elliptic_curves">Hasse's theorem</a>), where r is a 253-bit prime and h a 125-bit cofactor.
+    Provers use the subgroup of r points because the discrete logarithm is only as hard as the
+    largest prime factor of the group's order (<a href="https://en.wikipedia.org/wiki/Pohlig%E2%80%93Hellman_algorithm">Pohlig–Hellman</a>). The sizes come
+    from how BLS12 curves are built: from one 64-bit number x, r = x<sup>4</sup> − x<sup>2</sup> + 1
+    (253 bits) and p ≈ x<sup>6</sup>/3 (377 bits). BLS12-377's x was also chosen so that 2<sup>47</sup>
+    divides r − 1, which the <a href="https://en.wikipedia.org/wiki/Discrete_Fourier_transform_over_a_ring#Number-theoretic_transform">NTTs</a> (FFTs over a finite field) inside provers
+    need.</dd>
   <dt id="t-identity">Identity point O, and −P</dt>
   <dd>The curve's "zero": P + O = P. The negative of P = (x, y) is −P = (x, −y), and
     P + (−P) = O.</dd>
@@ -583,6 +633,11 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
   <dd>n is the number of points (and scalars) in the MSM. b is the number of scalar bits (253 for
     BLS12-377). c is Pippenger's window width in bits. g is Sagittal's batch size: points per
     precomputed table.</dd>
+  <dt id="t-sagittal">Sagittal plane</dt>
+  <dd>In anatomy, the vertical plane that divides a body into left and right halves
+    (<a href="https://en.wikipedia.org/wiki/Sagittal_plane">Wikipedia</a>). Sagittal MSM is named
+    for its slicing: it cuts the scalar bit matrix into columns one bit wide, where Pippenger cuts
+    strips c bits wide.</dd>
   <dt id="t-bucket">Bucket, table entry</dt>
   <dd>A bucket is a running sum of points. In Pippenger there is one per possible digit value per
     window; in Sagittal, one per scalar bit. A table entry is one precomputed subset sum of a
@@ -609,7 +664,7 @@ Double: 2·(X1, Y1, Z1)                    2 multiplications + 5 squarings
     batches of 2<sup>26</sup> points) was led by Yrrid and MatterLabs, whose entries were later
     combined into one (<a href="https://www.zprize.io/prizes/accelerating-msm-operations-on-gpu-fpga">challenge</a>, <a href="https://www.zprize.io/blog/announcing-zprize-results">results</a>, <a href="https://github.com/z-prize/2022-entries/tree/main/open-division/prize1-msm/prize1a-msm-gpu">entries</a>).</dd>
   <dt>BLS12-377, BN254, Goldilocks</dt>
-  <dd>BLS12-377 and BN254 are curves widely used in zero-knowledge proofs (377- and 254-bit
+  <dd><a href="https://eips.ethereum.org/EIPS/eip-2539">BLS12-377</a> (introduced in the <a href="https://eprint.iacr.org/2018/962">Zexe paper</a>) and BN254 are curves widely used in zero-knowledge proofs (377- and 254-bit
     fields; 253- and 254-bit scalars). Goldilocks is the prime 2<sup>64</sup> − 2<sup>32</sup> + 1,
     popular because its numbers fit in a 64-bit word (used by <a href="https://github.com/0xPolygonZero/plonky2">Plonky2</a>); this project uses a small
     test curve over it. BN254 is the curve behind Ethereum's pairing precompiles (<a href="https://eips.ethereum.org/EIPS/eip-197">EIP-197</a>).</dd>

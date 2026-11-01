@@ -6,6 +6,7 @@
 - pippenger.png the Pippenger panel alone
 - ec_add.png    adding and doubling points on y^2 = x^3 + 1 drawn over the real numbers
 - limbs.png     a 377-bit field multiplication as 32-bit word products
+- primes.png    BLS12-377's sizes: x, r, p and the point count h·r, to scale in bits
 
 Usage: uv run python scripts/make_figures.py
 """
@@ -271,7 +272,7 @@ def ec_add(path: Path) -> None:
             color=TEXT_SECONDARY,
         )
     fig.suptitle(
-        "$y^2 = x^3 + 1$ over the real numbers (BLS12-377 uses this equation mod a 377-bit prime)",
+        "$y^2 = x^3 + 1$ over the real numbers (cryptography uses the same formulas mod a prime)",
         fontsize=10,
         color=TEXT_SECONDARY,
         x=0.01,
@@ -385,6 +386,88 @@ def limbs(path: Path) -> None:
     plt.close(fig)
 
 
+def primes(path: Path) -> None:
+    """BLS12-377's primes to scale in bits, built from its one 64-bit parameter x."""
+    import math
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+
+    x = 0x8508C00000000001
+    r = x**4 - x**2 + 1
+    p = (x - 1) ** 2 * r // 3 + x
+    h = (x - 1) ** 2 // 3  # cofactor: the curve has h·r points
+    lx, lr, lp, lh = (math.log2(v) for v in (x, r, p, h))
+
+    fig, ax = plt.subplots(figsize=(10, 3.9), dpi=150, facecolor=SURFACE)
+    ax.set_facecolor(SURFACE)
+    ax.axis("off")
+    height, left = 0.55, 0.0
+
+    def bar(y: float, start: float, length: float, color: str, alpha: float = 0.3) -> None:
+        ax.add_patch(
+            Rectangle((start, y), length, height, facecolor=color, alpha=alpha, edgecolor=color)
+        )
+
+    def split(y: float, count: int) -> None:
+        """Dividers every log2(x) bits: r is about x^4, p about x^6."""
+        for i in range(1, count):
+            ax.plot([i * lx] * 2, [y, y + height], color=TEXT_SECONDARY, linewidth=0.8)
+
+    rows = [
+        (0, "x", f"{x.bit_length()} bits: the one parameter BLS12-377 is built from"),
+        (
+            1,
+            "r = x⁴ − x² + 1",
+            f"{r.bit_length()} bits: the subgroup has r points. Scalars are mod r.",
+        ),
+        (2, "p ≈ x⁶ / 3", f"{p.bit_length()} bits: the field. Coordinates are mod p."),
+        (3, "curve points = h · r", f"h is {h.bit_length()} bits, so the curve has about p points"),
+    ]
+    for row, label, note in rows:
+        y = -row
+        ax.text(
+            left - 6,
+            y + height / 2,
+            label,
+            ha="right",
+            va="center",
+            fontsize=11,
+            color=TEXT_PRIMARY,
+        )
+        end = {0: lx, 1: lr, 2: lp, 3: lr + lh}[row]
+        ax.text(end + 6, y + height / 2, note, va="center", fontsize=9.5, color=TEXT_SECONDARY)
+    bar(0, 0, lx, CURVE)
+    bar(-1, 0, lr, SAGITTAL)
+    split(-1, 4)
+    bar(-2, 0, lp, RESULT)
+    split(-2, 6)
+    bar(-3, 0, lr, SAGITTAL)
+    bar(-3, lr, lh, CURVE)
+    ax.text(lr / 2, -3 + height / 2, "r", ha="center", va="center", fontsize=10, color=TEXT_PRIMARY)
+    ax.text(
+        lr + lh / 2, -3 + height / 2, "h", ha="center", va="center", fontsize=10, color=TEXT_PRIMARY
+    )
+    for bits in range(0, 385, 64):
+        ax.plot([bits] * 2, [-3.25, 0.85], color=GRID, linewidth=0.8, zorder=0)
+        ax.text(bits, -3.55, str(bits), ha="center", fontsize=8, color=TEXT_SECONDARY)
+    ax.text(0, -3.95, "bits", fontsize=8, color=TEXT_SECONDARY)
+    ax.set_xlim(-105, 700)
+    ax.set_ylim(-4.1, 1.3)
+    ax.set_title(
+        "BLS12-377: every size comes from one 64-bit number x (bar lengths in bits)",
+        fontsize=12,
+        loc="left",
+        color=TEXT_PRIMARY,
+    )
+    fig.tight_layout()
+    fig.savefig(path, facecolor=SURFACE)
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -396,7 +479,8 @@ def main() -> None:
     slicing(args.out / "pippenger.png", ("pippenger",))
     ec_add(args.out / "ec_add.png")
     limbs(args.out / "limbs.png")
-    print(f"Wrote slicing.png, pippenger.png, ec_add.png and limbs.png to {args.out}")
+    primes(args.out / "primes.png")
+    print(f"Wrote slicing.png, pippenger.png, ec_add.png, limbs.png and primes.png to {args.out}")
 
 
 if __name__ == "__main__":

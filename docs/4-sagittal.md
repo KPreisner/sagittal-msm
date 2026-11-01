@@ -112,7 +112,7 @@ For g = 3:
 
 That is `2^g − 1 − g` additions per batch, the minimum possible.
 
-## Cost
+## Cost per proof and once per key
 
 With b-bit scalars and n points in n/g batches:
 

@@ -34,7 +34,7 @@ listed what the design was for. With what this repository measures:
   shares a proving key. They make the stored key bigger, costing device memory or transfer
   bandwidth, so the batch size g is a tunable parameter.
 
-## Shape of the work
+## Shape of the work at 2^20 points
 
 At 2^20 points on BLS12-377 (closed-form model, `benchmarks/results/structure.md`):
 

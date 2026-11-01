@@ -88,7 +88,7 @@ point per proof, when one precompute serves K proofs (2^20 points):
 - **Plain Pippenger** needs no precompute and does the fewest field operations at every K.
   Its disadvantages are structural, not arithmetic.
 
-## Memory
+## Table memory
 
 Sagittal's batch size is limited by GPU memory and shared memory
 ([5. Why it suits GPUs](5-gpu.md)). The model reproduces the logged V100 batch sizes and shows

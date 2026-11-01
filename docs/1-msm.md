@@ -17,8 +17,8 @@ elliptic-curve points instead of numbers:
 (k_1, k_2, …, k_n) · (P_1, P_2, …, P_n) = k_1·P_1 + k_2·P_2 + … + k_n·P_n
 ```
 
-The k_i are **scalars**: ordinary integers, about 253 bits long. The P_i are **points**: pairs
-(x, y) of 377-bit numbers that satisfy a curve equation. n is the number of points, in the
+The k_i are **scalars**: ordinary integers. The P_i are **points**: pairs (x, y) of numbers that
+satisfy a curve equation. n is the number of points, in the
 millions in practice.
 
 **Where MSMs come from.** A [zero-knowledge proof](https://en.wikipedia.org/wiki/Zero-knowledge_proof) lets a prover convince a verifier that a
@@ -26,11 +26,6 @@ computation was done correctly without revealing its inputs. Most proof systems 
 [PLONK](https://eprint.iacr.org/2019/953), and anything built on [KZG polynomial commitments](https://dankradfeist.de/ethereum/2020/06/16/kate-polynomial-commitments.html)) commit to large polynomials, and
 committing to a polynomial with n coefficients is one MSM of n points. That is why MSMs dominate
 proving time.
-
-**Why 253 bits and 377 bits?** There are two different primes. Coordinates are numbers modulo p,
-a 377-bit prime: the field. The points themselves form a group with r elements, where r is a
-253-bit prime, so adding any point to itself r times gives the identity point O (below) and only
-k mod r matters. Scalars are numbers modulo r; coordinates are numbers modulo p.
 
 Two properties of the real workload shape everything that follows:
 
@@ -40,9 +35,9 @@ Two properties of the real workload shape everything that follows:
 - **The scalars change every proof.** They come from the witness, so per-proof work is what
   matters.
 
-## Adding two points
+## Adding two elliptic-curve points
 
-The curves used here have the equation y² = x³ + b: b = 1 for [BLS12-377](https://eprint.iacr.org/2018/962) and b = 3 for [BN254](https://eips.ethereum.org/EIPS/eip-197).
+The curves used here have the equation y² = x³ + b for a constant b.
 Points on a curve can be added, and the rule has a picture. Over the real numbers, draw the line
 through P and Q; it meets the curve at exactly one more point; reflect that point across the
 x-axis, and the result is P + Q.
@@ -61,8 +56,8 @@ Adding a point to itself (doubling) uses the tangent line instead, with slope λ
 
 ![Adding and doubling points](figures/ec_add.png)
 
-Real curves use the same formulas with every number taken modulo a large prime p (377 bits for
-BLS12-377). There the picture becomes a scatter of points, but the algebra is identical. There is
+Cryptography uses the same formulas with every number taken modulo a large prime p. There the
+picture becomes a scatter of points (below), but the algebra is identical. There is
 also an identity point O (the "point at infinity"): P + O = P, and P + (−P) = O, where −P = (x, −y).
 
 **Division is the expensive part.** Modulo p, dividing means multiplying by an inverse, and an
@@ -86,52 +81,6 @@ Counts are multiplications plus squarings from the
 repo implements, and the tests check every one against measured field operations. XYZZ is what the
 fastest GPU MSMs use.
 
-### What the GPU code actually computed: Jacobian coordinates in Montgomery form
-
-Sagittal's benchmarked CUDA kernel kept its buckets in **Jacobian coordinates**. A point is
-stored as (X, Y, Z) and stands for the affine point x = X/Z², y = Y/Z³, so the denominators ride
-along in Z and nothing is divided until the very end. Table entries are stored affine (Z = 1), so
-adding one to a bucket is a **mixed add**. The kernel used sppark's point type, which implements
-the same formulas as this repo's `JacobianGroup`:
-
-```
-Mixed add: (X1, Y1, Z1) + (x2, y2)               7M + 4S
-  Z1Z1 = Z1²
-  U2   = x2 · Z1Z1                               x2 scaled to the bucket's denominator
-  S2   = y2 · Z1 · Z1Z1                          y2 scaled likewise
-  H    = U2 − X1                                 the x-difference (λ's denominator)
-  HH   = H²
-  I    = 4 · HH
-  J    = H · I
-  r    = 2 · (S2 − Y1)                           the y-difference (λ's numerator)
-  V    = X1 · I
-  X3   = r² − J − 2·V
-  Y3   = r · (V − X3) − 2 · Y1 · J
-  Z3   = (Z1 + H)² − Z1Z1 − HH                   = 2·Z1·H, the new denominator
-
-Double: 2·(X1, Y1, Z1)                           2M + 5S
-  A  = X1²,  B = Y1²,  C = B²
-  D  = 2 · ((X1 + B)² − A − C)                   = 4·X1·B
-  E  = 3 · A                                     3x² from the tangent slope 3x²/(2y)
-  F  = E²
-  X3 = F − 2·D
-  Y3 = E · (D − X3) − 8·C
-  Z3 = 2 · Y1 · Z1
-```
-
-They are the affine formulas above with every division replaced by multiplying the other side
-through by Z. M is a field multiplication and S a squaring. In the
-[Explicit-Formulas Database](https://hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html), the
-standard catalog of these formulas, they are listed as `madd-2007-bl` (mixed addition, Bernstein
-and Lange, 2007) and `dbl-2009-l` (doubling, Lange, 2009); sppark's source cites the same IDs.
-
-**Every value in those formulas is in Montgomery form**, a·R mod p
-([2. Big numbers and GPUs](2-hardware.md) explains why). That changes nothing in the formulas:
-- every product or square is one Montgomery multiplication (about 300 word multiply-adds);
-- additions, subtractions and small multiples (2·, 3·, 4·, 8·) are ordinary modular additions;
-- values enter Montgomery form once when the points are loaded, and leave it once when the
-  final result is converted back to an affine point.
-
 ```mermaid
 flowchart LR
     F["Field ops<br/>mul, sqr, add mod p"] --> E["Curve ops<br/>add, mixed add, double"]
@@ -139,7 +88,7 @@ flowchart LR
     S --> M["MSM<br/>Σ k_i·P_i"]
 ```
 
-## There is no multiply
+## There is no multiply for elliptic-curve points
 
 A curve has **only addition**. "k·P" is shorthand for adding P to itself k times:
 
@@ -151,9 +100,15 @@ There is no instruction that multiplies a point by a number, and no way to multi
 together. Going backwards, recovering k from k·P, is the [discrete logarithm](https://en.wikipedia.org/wiki/Discrete_logarithm) problem. It is
 believed infeasible for these curves, and that is what makes them useful for cryptography.
 
-Adding P to itself 2²⁵³ times is impossible, so scalar multiplication uses **[double-and-add](https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication)**:
-read k's bits from the top, double at every bit and add P at every 1 bit. For k = 13 = 1101 in
-binary:
+## A more efficient way to add
+
+In binary, each digit is worth twice the digit to its right: 1, 2, 4, 8, … So 13 is `1101` in
+binary: 8 + 4 + 0 + 1. Reading a binary number from the left, each new digit doubles everything read
+so far, then adds itself: `1` = 1, `11` = 2·1 + 1 = 3, `110` = 2·3 = 6, `1101` = 2·6 + 1 = 13.
+
+Without a multiply, 13·P means adding P to itself 12 times: P + P + … + P.
+**[Double-and-add](https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication)** follows the binary digits instead: start with P, then for each
+remaining digit double what you have (P + P is one addition) and add P if the digit is 1:
 
 | bit | step | value |
 |---|---|---|
@@ -162,8 +117,48 @@ binary:
 | 0 | double | 6P |
 | 1 | double, add P | 12P + P = 13P |
 
-That is 3 doublings and 2 additions instead of 12 additions. A 253-bit scalar takes about
-252 doublings and 126 additions: **376 curve operations per point**, measured.
+That reaches 13·P in **5 additions instead of 12**: 3 doublings and 2 additions of P. The
+gap grows fast: for a 20-bit k, about 30 additions instead of up to a million.
+
+## Curves modulo a prime: finite fields and subgroups
+
+Cryptography doesn't use real numbers. It takes every number modulo a prime p, so the coordinates
+are whole numbers from 0 to p − 1: a **finite field**. The addition formulas above still work, but
+the smooth curve turns into a scatter of about p dots. O isn't one of the dots; it's one extra
+point with no coordinates.
+
+Provers don't use every dot. They start at one point G and keep adding G: G, 2G, 3G, … until the
+sequence reaches O. That loop is a **subgroup**, and its size is called r. After O the loop
+repeats, (r + 1)·G = G, like a clock with r hours, so a scalar k only matters mod r. Here it is
+on y² = x³ + 3 with p = 37, which has 39 = 3 × 13 points:
+
+![On y² = x³ + 3 mod 37, G, 2G, 3G, … visit 12 of the 38 dots and then O: a subgroup of 13 points](figures/subgroup.gif)
+
+r is prime on purpose: then every point in the loop except O leads around the whole loop, and an
+attacker can't split the problem into smaller pieces.
+
+## A real curve: BLS12-377
+
+Everything here uses [BLS12-377](https://eips.ethereum.org/EIPS/eip-2539) (introduced in the [Zexe paper](https://eprint.iacr.org/2018/962)), the curve of
+the ZPrize MSM competition. Its equation is y² = x³ + 1 ([BN254](https://eips.ethereum.org/EIPS/eip-197), another common curve, uses
+y² = x³ + 3, the same equation as the tiny example above). Its two primes are far too big to draw:
+
+- **p, 377 bits.** Coordinates are numbers modulo p. In full, p is the 114-digit number
+  `258664426012969094010652733694893533536393512754914660539884262666720468348340822774968888139573360124440321458177`.
+- **r, 253 bits.** The subgroup provers use has r points, and scalars are numbers modulo r. In
+  full, r is the 76-digit number `8444461749428370424248824938781546531375899335154063827935233455917409239041`.
+
+So a scalar has 253 bits, and double-and-add takes about 252 doublings and 126 additions:
+**376 curve operations per point**, measured.
+
+**The details.** The curve has h·r points, about p of them
+([Hasse's theorem](https://en.wikipedia.org/wiki/Hasse%27s_theorem_on_elliptic_curves)), with a 125-bit cofactor h. The discrete logarithm is only as hard
+as the largest prime factor of the group's order ([Pohlig–Hellman](https://en.wikipedia.org/wiki/Pohlig%E2%80%93Hellman_algorithm)), which is why provers
+use the prime-order subgroup. The sizes come from how BLS12 curves are built: from one 64-bit
+number x, r = x⁴ − x² + 1 (253 bits) and p ≈ x⁶/3 (377 bits). BLS12-377's x was also chosen so
+that 2⁴⁷ divides r − 1, which the [NTTs](https://en.wikipedia.org/wiki/Discrete_Fourier_transform_over_a_ring#Number-theoretic_transform) (FFTs over a finite field) inside provers need.
+
+![BLS12-377's sizes to scale: x is 64 bits, r is 253, p is 377, and the curve has h·r points](figures/primes.png)
 
 ## The naive MSM
 
