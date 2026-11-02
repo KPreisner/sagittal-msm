@@ -281,41 +281,72 @@ function doubleAndAdd() {
 function limbs() {
   const root = document.getElementById("limbs");
   const svg = root.querySelector("[data-view]");
-  const N = 12, C = 19, X = 70;
+  // Long multiplication with 32-bit words for digits. Column 0 (word 0) is on the right. Row i is
+  // a times word i of b: 13 words, since each word product is 64 bits. It starts at word i, and
+  // the columns add up to a 24-word product.
+  const N = 12, C = 20, X0 = 140, ROW0 = 72, PROD = 346;
+  const cx = (col) => X0 + (2 * N - 1 - col) * C;
+  const sub = (n) => String(n).split("").map((d) => "₀₁₂₃₄₅₆₇₈₉"[d]).join("");
+  const cell = (col, y, fill, stroke, opacity) =>
+    el("rect", { x: cx(col), y, width: C - 3, height: C - 3, rx: 3, fill, "fill-opacity": opacity,
+                 stroke }, svg);
   function render(s) {
     clear(svg);
-    for (const [name, y] of [["a", 10], ["b", 36]]) {
-      txt(svg, X - 14, y + 15, name, { "text-anchor": "end", "font-size": 15 });
+    const rowsDone = Math.min(s, N), done = s > N;
+    for (const [name, y] of [["a", 10], ["b", 34]]) {
+      txt(svg, cx(N - 1) - 10, y + 14, name, { "text-anchor": "end", "font-size": 15 });
       for (let i = 0; i < N; i++) {
-        el("rect", { x: X + i * C, y, width: C - 3, height: C - 3, rx: 3, fill: "var(--sagittal)",
-                     "fill-opacity": 0.3, stroke: "var(--sagittal)" }, svg);
+        const lit = s > 0 && !done && (name === "a" || i === s - 1);
+        cell(i, y, "var(--sagittal)", "var(--sagittal)", lit ? 0.9 : 0.3);
       }
     }
-    txt(svg, X + N * C + 12, 23, "12 words of 32 bits each", { fill: "var(--text-2)" });
-    txt(svg, X - 14, 80 + (N * C) / 2, "a × b", { "text-anchor": "end", "font-size": 15 });
-    const rowsDone = Math.min(s, N);
+    txt(svg, 12, 24, "12 words of 32 bits each", { fill: "var(--text-2)" });
+    txt(svg, 12, 48, `${rowsDone * N} of 144 word multiplications`);
     for (let i = 0; i < N; i++) {
-      for (let j = 0; j < N; j++) {
-        const done = i < rowsDone;
-        el("rect", { x: X + j * C, y: 72 + i * C, width: C - 3, height: C - 3, rx: 3,
-                     fill: done ? "var(--pippenger)" : "none", "fill-opacity": 0.35,
-                     stroke: done ? "var(--pippenger)" : "var(--track)" }, svg);
+      const y = ROW0 + i * 22, current = i === s - 1, filled = i < rowsDone;
+      if (filled) {
+        txt(svg, cx(i + N) - 8, y + 13, `a × b${sub(i)}`,
+            { "text-anchor": "end", "font-size": 12, fill: "var(--text-2)" });
+      }
+      for (let j = 0; j <= N; j++) {
+        cell(i + j, y, filled ? "var(--pippenger)" : "none",
+             filled ? "var(--pippenger)" : "var(--track)", current ? 0.8 : 0.3);
       }
     }
-    const lines = [
-      [`${rowsDone * N} of 144 word multiplications`, "var(--text)"],
-      [s > N ? "+ about 156 to reduce the result mod p" : "", "var(--text)"],
-      [s > N ? "≈ 300 multiply-adds per field multiplication" : "", "var(--text-2)"],
-      [s > N + 1 ? "× 10 per mixed add ≈ 3,000 per curve addition" : "", "var(--text-2)"],
-    ];
-    lines.forEach(([t, fill], i) => txt(svg, X + N * C + 24, 110 + i * 30, t, { fill, "font-size": 14 }));
-    const a = `<b style="color:var(--sagittal)">a</b>`, b = `<b style="color:var(--sagittal)">b</b>`;
-    if (s === 0) return `Each orange cell will be one 32 × 32 → 64-bit multiplication of a word of ${a} by a word of ${b}.`;
-    if (s <= N) return `Row ${s}: word ${s} of ${a} times all 12 words of ${b}, with carries passed along.`;
-    if (s === N + 1) return "Then the 24-word product is reduced mod p (Montgomery): about 300 multiply-adds in all.";
-    return "A mixed curve addition needs 10 field multiplications: about 3,000 word multiply-adds.";
+    el("line", { x1: cx(2 * N - 1), x2: cx(0) + C - 3, y1: PROD - 8, y2: PROD - 8,
+                 stroke: "var(--text-2)" }, svg);
+    if (done) {
+      // A brace over all 12 rows with a plus sign: the rows are summed, as on paper.
+      const top = ROW0, bot = ROW0 + N * 22 - 5, bx = 52, mid = (top + bot) / 2;
+      el("path", { d: `M ${bx + 8} ${top} q -8 0 -8 8 V ${mid - 8} q 0 8 -8 8 q 8 0 8 8 ` +
+                      `V ${bot - 8} q 0 8 8 8`, fill: "none", stroke: "var(--result)",
+                   "stroke-width": 2 }, svg);
+      txt(svg, bx - 14, mid + 7, "+", { "text-anchor": "end", "font-size": 22,
+                                        "font-weight": 600, fill: "var(--result)" });
+    }
+    for (let col = 0; col < 2 * N; col++) {
+      cell(col, PROD, done ? "var(--result)" : "none", done ? "var(--result)" : "var(--track)",
+           0.45);
+    }
+    txt(svg, cx(2 * N - 1) - 10, PROD + 14, done ? "24 words" : "a × b",
+        { "text-anchor": "end", "font-size": 13, fill: done ? "var(--text)" : "var(--text-2)" });
+    const hl = (x) => `<b style="color:var(--pippenger)">${x}</b>`;
+    if (s === 0) {
+      return "Long multiplication, as on paper, with each digit now a 32-bit word. On paper, " +
+             "47 × 36 is 47 × 6, plus 47 × 3 shifted one place left: 282 + 1410 = 1692.";
+    }
+    if (!done) {
+      if (s === 1) {
+        return "Row 1: all 12 words of a times word 0 of b. Each word product is 64 bits, two " +
+               `words, so the row is 13 words long. ${hl(N)} word multiplications so far.`;
+      }
+      return `Row ${s}: a times word ${s - 1} of b, written ${s - 1} word${s === 2 ? "" : "s"} ` +
+             `further left. ${hl(s * N)} word multiplications so far.`;
+    }
+    return `Adding each column, with carries, gives the product: <b style="color:var(--result)">` +
+           "24 words</b>, twice the 12 a number may use. It has to be reduced mod p, below.";
   }
-  stepper(root, () => N + 3, render, { interval: 500 });
+  stepper(root, () => N + 2, render, { interval: 600 });
 }
 
 // ---------------------------------------------------------------------------------------------

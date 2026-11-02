@@ -15,7 +15,7 @@ array of words, called limbs: 6 words on a CPU, **12 on a GPU**.
 Multiplying happens word by word, like long multiplication on paper. Two 12-word numbers take
 12 × 12 = 144 word multiplications, with carries passed from each partial product to the next:
 
-![A 377-bit multiplication as 32-bit word products](figures/limbs.png)
+![Long multiplication of two 12-word numbers into a 24-word product](figures/limbs.png)
 
 ## Division is the expensive part
 
