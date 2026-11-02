@@ -284,6 +284,7 @@ def ec_add(path: Path) -> None:
 
 
 def limbs(path: Path) -> None:
+    """Long multiplication of two 12-word numbers: shifted rows that add up to 24 words."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -291,92 +292,76 @@ def limbs(path: Path) -> None:
     from matplotlib.patches import Rectangle
 
     words = 12  # 377 bits in 32-bit words
-    fig, ax = plt.subplots(figsize=(10, 5.6), dpi=150, facecolor=SURFACE)
+    size = 0.4
+    left = 2.0
+
+    def x(col: int) -> float:
+        # Column 0 (word 0) is on the right, as in long multiplication on paper.
+        return left + (2 * words - 1 - col) * size
+
+    fig, ax = plt.subplots(figsize=(10, 6.4), dpi=150, facecolor=SURFACE)
     ax.set_facecolor(SURFACE)
     ax.axis("off")
-    size = 0.38
-    left, top = 1.4, 0.0
-    for name, y in (("a", top), ("b", top - 0.55)):
-        ax.text(
-            left - 0.25,
-            y + size / 2,
-            name,
-            ha="right",
-            va="center",
-            fontsize=12,
-            color=TEXT_PRIMARY,
+
+    def cell(col: int, y: float, color: str, alpha: float) -> None:
+        ax.add_patch(
+            Rectangle(
+                (x(col), y),
+                size * 0.88,
+                size * 0.88,
+                facecolor=color,
+                alpha=alpha,
+                edgecolor=color,
+                linewidth=0.6,
+            )
         )
+
+    def label(col: int, y: float, text: str, color: str = TEXT_PRIMARY) -> None:
+        ax.text(
+            x(col) - 0.12, y + size * 0.44, text, ha="right", va="center", fontsize=11, color=color
+        )
+
+    for name, y in (("a", 0.0), ("b", -0.5)):
+        label(words - 1, y, name)
         for i in range(words):
-            ax.add_patch(
-                Rectangle(
-                    (left + i * size, y),
-                    size * 0.92,
-                    size * 0.92,
-                    facecolor=SAGITTAL,
-                    alpha=0.25,
-                    edgecolor=SAGITTAL,
-                )
-            )
-        ax.text(
-            left + words * size + 0.15,
-            y + size / 2,
-            "12 words of 32 bits (377 bits used)",
-            va="center",
-            fontsize=9,
-            color=TEXT_SECONDARY,
-        )
-    grid_top = top - 1.4
+            cell(i, y, SAGITTAL, 0.3)
     ax.text(
-        left - 0.25,
-        grid_top - words * size / 2,
-        "a × b",
-        ha="right",
-        va="center",
-        fontsize=12,
-        color=TEXT_PRIMARY,
+        0.1, size * 0.44, "12 words of 32 bits each", va="center", fontsize=10, color=TEXT_SECONDARY
     )
+
+    row_top = -1.2
     for i in range(words):
-        for j in range(words):
-            ax.add_patch(
-                Rectangle(
-                    (left + j * size, grid_top - (i + 1) * size),
-                    size * 0.92,
-                    size * 0.92,
-                    facecolor=PIPPENGER,
-                    alpha=0.22,
-                    edgecolor=PIPPENGER,
-                    linewidth=0.6,
-                )
-            )
-    notes = [
-        ("144 word multiplications for the product a × b", TEXT_PRIMARY),
-        (
-            "+ about 156 more to reduce it mod p (Montgomery, CIOS: 2s² + s = 300 for s = 12)",
-            TEXT_PRIMARY,
-        ),
-        (
-            "≈ 300 multiply-adds per field multiplication, with a carry chain through every one",
-            TEXT_SECONDARY,
-        ),
-        ("× 10 field multiplications per mixed add ≈ 3,000 per curve addition", TEXT_SECONDARY),
-        ("", TEXT_SECONDARY),
-        (
-            "Each orange cell is one 32 × 32 → 64-bit multiply of a word of a by a word of b.",
-            TEXT_SECONDARY,
-        ),
-        (
-            "A 64-bit CPU needs 6 × 6 = 36 for the product; GPUs multiply 32 bits at a time.",
-            TEXT_SECONDARY,
-        ),
-    ]
-    for k, (note, color) in enumerate(notes):
-        ax.text(
-            left + words * size + 0.3, grid_top - 0.5 - k * 0.55, note, fontsize=10, color=color
-        )
-    ax.set_xlim(0, 13)
-    ax.set_ylim(grid_top - words * size - 0.3, top + 0.8)
+        y = row_top - i * (size + 0.06)
+        label(i + words, y, f"a × b[{i}]", TEXT_SECONDARY)
+        for j in range(words + 1):
+            cell(i + j, y, PIPPENGER, 0.3)
+    bottom = row_top - words * (size + 0.06)
+    ax.plot(
+        [x(2 * words - 1), x(0) + size * 0.88],
+        [bottom + 0.2, bottom + 0.2],
+        color=TEXT_SECONDARY,
+        linewidth=0.8,
+    )
+    product = bottom - 0.3
+    label(2 * words - 1, product, "24 words")
+    for col in range(2 * words):
+        cell(col, product, RESULT, 0.4)
+
+    ax.text(
+        0.1,
+        -0.3,
+        "Each row: all 12 words of a\ntimes one word of b. Each\nword product is 64 bits,\n"
+        "so a row is 13 words.\n\nEach row starts one word\nfurther left.\n\n12 × 12 = 144 word\n"
+        "multiplications. The\ncolumns add up, with\ncarries, to a 24-word\nproduct.",
+        va="top",
+        fontsize=10,
+        color=TEXT_SECONDARY,
+        linespacing=1.4,
+    )
+    ax.set_xlim(0, x(0) + size + 0.1)
+    ax.set_ylim(product - 0.2, size + 0.3)
     ax.set_title(
-        "One 377-bit field multiplication on a GPU with 32-bit integer multipliers",
+        "Multiplying two 377-bit numbers with 32-bit words: long multiplication",
         fontsize=12,
         loc="left",
         color=TEXT_PRIMARY,
