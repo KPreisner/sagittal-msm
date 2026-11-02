@@ -135,7 +135,10 @@ on y² = x³ + 3 with p = 37, which has 39 = 3 × 13 points:
 
 ## Why r is prime
 
-An attacker sees G and k·G and wants k. Suppose r were 12 instead.
+An attacker sees G and k·G and wants k. Here k stands for any secret hidden this way: a
+private key, whose public key is k·G, or the τ behind a KZG setup's points τ·G, τ²·G, …
+(anyone who learns τ can forge proofs). Each is only as safe as the discrete logarithm is hard.
+Suppose r were 12 instead.
 Multiplying k·G by 4 gives k·(4G), and 4G gets back to O after only 3 steps, so k·(4G) is one
 of just 3 points: 0·4G, 1·4G or 2·4G. Checking which one reveals k mod 3. Multiplying by 3
 instead reveals k mod 4, in 4 tries. Only one number from 0 to 11 has both remainders
@@ -143,6 +146,12 @@ instead reveals k mod 4, in 4 tries. Only one number from 0 to 11 has both remai
 of 12. At real sizes the saving is enormous: an r that factored into small primes would
 fall to a few small searches ([Pohlig–Hellman](https://en.wikipedia.org/wiki/Pohlig%E2%80%93Hellman_algorithm)). A prime r has no factors to split on, so the attacker
 faces the whole loop.
+
+So a composite r is weak because each factor q of r hides a smaller loop inside the big one:
+(r/q)·G gets back to O after only q steps, and pushing k·G into that loop leaks k mod q in at
+most q tries. The attacker's work is the *sum* of the factors, while the loop's size is their
+*product*. A prime r has no smaller loop, so nothing leaks, and the only way in is to search all
+r points.
 
 ## A real curve: BLS12-377
 

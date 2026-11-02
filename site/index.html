@@ -157,10 +157,11 @@
              font-size: 14px; color: var(--text-2); }
   .options label { display: inline-flex; gap: 6px; align-items: center; }
   .options input[type="range"] { accent-color: var(--accent); width: 180px; }
-  .options input[type="number"] {
+  .options select, .options input[type="number"] {
     width: 9em; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
     background: var(--bg); color: var(--text); font: inherit;
   }
+  .options select { width: auto; }
   table { border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
   th, td { padding: 4px 10px; text-align: left; border-bottom: 1px solid var(--border); }
   th { color: var(--text-2); font-weight: 600; }
@@ -344,7 +345,10 @@ y₃ = −y = λ(x₁ − x₃) − y₁</pre></li>
   <div class="controls" data-controls></div>
 </div>
 <h3>Why r is prime</h3>
-<p>An attacker sees G and k·G and wants k. Suppose r were 12 instead.
+<p>An attacker sees G and k·G and wants k. Here k stands for any secret hidden this way: a
+  private key, whose public key is k·G, or the τ behind a KZG setup's points τ·G, τ²·G, …
+  (anyone who learns τ can forge proofs). Each is only as safe as the discrete logarithm is
+  hard. Suppose r were 12 instead.
   Multiplying k·G by 4 gives k·(4G), and 4G gets back to O after only 3 steps, so k·(4G) is one
   of just 3 points: 0·4G, 1·4G or 2·4G. Checking which one reveals k mod 3. Multiplying by 3
   instead reveals k mod 4, in 4 tries. Only one number from 0 to 11 has both remainders
@@ -352,6 +356,22 @@ y₃ = −y = λ(x₁ − x₃) − y₁</pre></li>
   of 12. At real sizes the saving is enormous: an r that factored into small primes would
   fall to a few small searches (<a href="https://en.wikipedia.org/wiki/Pohlig%E2%80%93Hellman_algorithm">Pohlig–Hellman</a>). A prime r has no factors to split on, so the attacker
   faces the whole loop.</p>
+<p>So a composite r is weak because each factor q of r hides a smaller loop inside the big one:
+  (r/q)·G gets back to O after only q steps, and pushing k·G into that loop leaks k mod q in at
+  most q tries. The attacker's work is the <em>sum</em> of the factors, while the loop's size is
+  their <em>product</em>. A prime r has no smaller loop, so nothing leaks, and the only way in is
+  to search all r points.</p>
+<p>Race the two attacks. Attacker 1 tries every multiple of G; attacker 2 splits r into its
+  factors first. Then switch r to the prime next to it and race again:</p>
+<div class="card" id="race">
+  <div class="options" style="margin-top:0">
+    <label>r = <select data-r></select></label>
+    <label>secret k = <select data-k></select></label>
+  </div>
+  <svg data-view viewBox="0 0 640 300" role="img" aria-label="Two attackers race to find k: trying every multiple, against splitting r into factors"></svg>
+  <p class="caption" data-caption aria-live="polite"></p>
+  <div class="controls" data-controls></div>
+</div>
 
 <h3>A real curve: BLS12-377</h3>
 <p>Everything on this page uses <a href="https://eips.ethereum.org/EIPS/eip-2539">BLS12-377</a> (introduced in the
