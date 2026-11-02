@@ -161,6 +161,132 @@ function subgroup() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// 1. Why r is prime: brute force against splitting r into its prime-power factors (Pohlig–Hellman)
+
+function primeRace() {
+  const root = document.getElementById("race");
+  const svg = root.querySelector("[data-view]");
+  const pick = root.querySelector("[data-r]"), pickK = root.querySelector("[data-k]");
+  const COLS = 24, PITCH = 20, CELL = 18, X = 130, W = 640;
+  const hl = (x) => `<b style="color:var(--sagittal)">${x}</b>`;
+  const found = (x) => `<b style="color:var(--result)">${x}</b>`;
+  // Prime-power factors of n: 60 -> [4, 3, 5].
+  const factors = (n) => {
+    const out = [];
+    for (let q = 2; n > 1; q++) {
+      let f = 1;
+      while (n % q === 0) { n /= q; f *= q; }
+      if (f > 1) out.push(f);
+    }
+    return out;
+  };
+  // Each composite r sits next to a prime.
+  const CHOICES = [12, 13, 60, 61, 210, 211];
+  const primeFactors = (n) => factors(n).flatMap((f) => { const out = []; for (let q = 2; f > 1; q++) while (f % q === 0) { out.push(q); f /= q; } return out; });
+  for (const n of CHOICES) {
+    const ps = primeFactors(n);
+    const o = new Option(ps.length === 1 ? `${n} (prime)` : `${n} (${ps.length} prime factors: ${ps.join(" × ")})`, n);
+    pick.add(o);
+  }
+  let r, qs, k;
+  const setR = () => {
+    r = Number(pick.value);
+    qs = factors(r);
+    pickK.length = 0;
+    for (let j = 1; j < r; j++) pickK.add(new Option(j, j));
+    pickK.value = r - 1; // the hardest k for attacker 1; for r = 12, the text's "7 tries instead of 12"
+    k = Number(pickK.value);
+  };
+  setR();
+  // Tries each attacker needs: attacker 1 tests 0, 1, …, k; attacker 2 tests 0, 1, …, k mod q per factor.
+  const bruteTries = () => k + 1;
+  const splitTries = () => sum(qs.map((q) => (k % q) + 1));
+  const last = () => Math.max(bruteTries(), splitTries());
+
+  function grid(y, n, tried, hit, label, labelColor) {
+    txt(svg, X - 12, y + 13, label, { "text-anchor": "end", fill: labelColor });
+    for (let j = 0; j < n; j++) {
+      const cx = X + (j % COLS) * PITCH, cy = y + Math.floor(j / COLS) * PITCH;
+      const isHit = j === hit && j < tried, on = j < tried;
+      el("rect", { x: cx, y: cy, width: CELL, height: CELL, rx: 3,
+                   fill: isHit ? "var(--result)" : on ? "var(--sagittal)" : "var(--track)",
+                   "fill-opacity": isHit ? 1 : on ? 0.35 : 1 }, svg);
+      txt(svg, cx + CELL / 2, cy + 12.5, j, { "text-anchor": "middle", "font-size": j > 99 ? 8 : 9,
+                                             fill: isHit ? "#ffffff" : "var(--text-2)" });
+    }
+    return y + Math.ceil(n / COLS) * PITCH;
+  }
+
+  function render(s) {
+    clear(svg);
+    const prime = qs.length === 1;
+    const product = qs.join(" × ");
+    // Attacker 1: compare k·G with 0·G, 1·G, 2·G, … in turn.
+    const t1 = Math.min(s, bruteTries()), done1 = t1 === bruteTries();
+    let y = 22;
+    txt(svg, 0, y, "Attacker 1: compare k·G with 0·G, 1·G, 2·G, …", { "font-weight": 600 });
+    txt(svg, W, y, `${t1} tries`, { "text-anchor": "end", fill: "var(--text-2)" });
+    y = grid(y + 12, r, t1, k, done1 ? `k = ${k}` : "k = ?", done1 ? "var(--result)" : "var(--text-2)");
+
+    // Attacker 2: for each factor q, (r/q)·(k·G) = (k mod q)·((r/q)·G), one of only q points.
+    let left = s, t2 = 0, current = null;
+    y += 34;
+    const counter2 = txt(svg, W, y, "", { "text-anchor": "end", fill: "var(--text-2)" });
+    txt(svg, 0, y, prime ? `Attacker 2: r = ${r} is prime, nothing to split`
+                         : `Attacker 2: split r = ${r} = ${product}`, { "font-weight": 600 });
+    y += 12;
+    for (const q of qs) {
+      const need = (k % q) + 1, t = Math.max(0, Math.min(left, need));
+      left -= t; t2 += t;
+      if (t > 0 && (t < need || left === 0) && current === null) current = q;
+      const done = t === need;
+      y = grid(y, q, t, k % q, done ? `k mod ${q} = ${k % q}` : `k mod ${q} = ?`,
+               done ? "var(--result)" : "var(--text-2)") + 8;
+    }
+    counter2.textContent = `${t2} tries`;
+    const done2 = t2 === splitTries();
+    if (done2 && !prime) {
+      txt(svg, X, y + 10, `Only one k below ${r} has ${qs.length === 2 ? "both" : `all ${qs.length}`} remainders: k = ${k}`,
+          { fill: "var(--result)", "font-weight": 600 });
+    }
+    y += done2 && !prime ? 22 : 0;
+    svg.setAttribute("viewBox", `0 0 ${W} ${y + 6}`);
+
+    const worst = prime ? `${r}` : `${qs.join(" + ")} = ${sum(qs)}`;
+    if (s === 0) {
+      return `The secret is k = ${k}${k === r - 1 ? ", the hardest k for attacker 1" : ""}, but the attackers ` +
+             `see only G and k·G, on a loop of r = ${r} points. ` +
+             (prime ? `${r} is prime.` : `${r} = ${product}.`) + ` Press Play to race them.`;
+    }
+    if (s >= last()) {
+      if (prime) {
+        return `Attacker 1 took ${found(t1)} tries and attacker 2 took ${found(t2)}: the same search. ` +
+               `With r prime there is no smaller loop to drop into, so the worst case for both is ${r} tries. ` +
+               `<span class="sub">BLS12-377's r is a 253-bit prime: about 2<sup>253</sup> tries for anyone.</span>`;
+      }
+      return `Attacker 1 took ${found(t1)} tries, attacker 2 took ${found(t2)}. Worst case: ${r} tries ` +
+             `against ${worst}: each factor leaks a piece of k for a few tries, so the attacker's work ` +
+             `adds the factors while r multiplies them. ` +
+             `<span class="sub">At real size, a 253-bit r made of 16-bit primes would fall in about a million ` +
+             `tries instead of 2<sup>253</sup>. Try a prime r.</span>`;
+    }
+    const a1 = done1 ? `Attacker 1 is done: k = ${k}.` : `Attacker 1: is k·G = ${hl(`${t1 - 1}·G`)}? Not yet.`;
+    let a2;
+    if (done2) a2 = `Attacker 2 is done: k = ${k}.`;
+    else if (prime) a2 = `Attacker 2 has nothing to split on, so does the same search.`;
+    else {
+      const q = current, m = r / q;
+      a2 = `Attacker 2: ${m}·(k·G) = k·(${m}G), and ${m}G loops back to O after only ${q} steps, ` +
+           `so ${hl(`${m}·(k·G)`)} is one of just ${q} points. Matching it reveals k mod ${q}.`;
+    }
+    return `${a1} ${a2}`;
+  }
+  const st = stepper(root, () => last() + 1, render, { interval: 250 });
+  pick.onchange = () => { setR(); st.restart(); };
+  pickK.onchange = () => { k = Number(pickK.value); st.restart(); };
+}
+
+// ---------------------------------------------------------------------------------------------
 // 1. Elliptic-curve addition on y^2 = x^3 + 1 over the reals
 
 function ecAdd() {
@@ -600,6 +726,7 @@ function accumulate() {
 // ---------------------------------------------------------------------------------------------
 
 subgroup();
+primeRace();
 ecAdd();
 doubleAndAdd();
 limbs();
